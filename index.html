@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Co-Curricular Management System</title>
+    <link rel="stylesheet" href="styles.css">
+    <!-- Supabase JS -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+
+    <!-- Loading Overlay -->
+    <div id="loading-overlay" class="hidden">
+        <div class="spinner"></div>
+    </div>
+
+    <!-- Toast Notifications -->
+    <div id="toast-container"></div>
+
+    <!-- Layout Wrapper -->
+    <div class="app-wrapper">
+        
+        <!-- Sidebar Navigation (Hidden on Login) -->
+        <nav id="sidebar" class="hidden">
+            <div class="brand">School Sys</div>
+            <div class="user-info" id="nav-user-info">Loading...</div>
+            <ul class="nav-links">
+                <li id="nav-admin" class="hidden"><a href="#" onclick="app.showView('admin')">Admin Dashboard</a></li>
+                <li id="nav-teacher"><a href="#" onclick="app.showView('teacher')">Teacher Portal</a></li>
+            </ul>
+            <div class="logout-section">
+                <button onclick="app.handleLogout()" class="btn btn-outline-danger">Logout</button>
+            </div>
+        </nav>
+
+        <!-- Main Content Area -->
+        <main id="main-content">
+            
+            <!-- VIEW: LOGIN -->
+            <section id="view-login" class="view-section">
+                <div class="login-card">
+                    <h2>System Login</h2>
+                    <form id="login-form">
+                        <div class="form-group">
+                            <label>Email</label>
+                            <input type="email" id="login-email" required placeholder="admin@school.edu">
+                        </div>
+                        <div class="form-group">
+                            <label>Password</label>
+                            <input type="password" id="login-password" required>
+                        </div>
+                        <button type="submit" class="btn btn-primary full-width">Sign In</button>
+                    </form>
+                    <p class="login-help">Contact IT for account creation.</p>
+                </div>
+            </section>
+
+            <!-- VIEW: ADMIN DASHBOARD -->
+            <section id="view-admin" class="view-section hidden">
+                <header class="page-header">
+                    <h1>Admin Management</h1>
+                </header>
+                
+                <div class="tabs">
+                    <button class="tab-btn active" onclick="app.switchAdminTab('classes')">Classes</button>
+                    <button class="tab-btn" onclick="app.switchAdminTab('students')">Students</button>
+                    <button class="tab-btn" onclick="app.switchAdminTab('types')">Co-Curricular Types</button>
+                </div>
+
+                <!-- Admin Tab: Classes -->
+                <div id="admin-tab-classes" class="admin-tab-content">
+                    <div class="actions-bar">
+                        <select id="admin-class-grade-filter" onchange="app.loadAdminClasses()">
+                            <option value="">All Forms</option>
+                        </select>
+                        <button class="btn btn-primary" onclick="app.openModal('modal-class')">Add Class</button>
+                    </div>
+                    <table class="data-table">
+                        <thead><tr><th>Form</th><th>Class Name</th><th>Actions</th></tr></thead>
+                        <tbody id="table-classes-body"></tbody>
+                    </table>
+                </div>
+
+                <!-- Admin Tab: Students -->
+                <div id="admin-tab-students" class="admin-tab-content hidden">
+                    <div class="actions-bar">
+                        <select id="admin-student-class-filter" onchange="app.loadAdminStudents()">
+                            <option value="">Select Class...</option>
+                        </select>
+                        <button class="btn btn-primary" onclick="app.openModal('modal-student')">Add Student</button>
+                    </div>
+                    <table class="data-table">
+                        <thead><tr><th>Student No</th><th>Name</th><th>Actions</th></tr></thead>
+                        <tbody id="table-students-body"></tbody>
+                    </table>
+                </div>
+
+                <!-- Admin Tab: Types -->
+                <div id="admin-tab-types" class="admin-tab-content hidden">
+                    <div class="actions-bar">
+                        <button class="btn btn-primary" onclick="app.openModal('modal-type')">Add Type</button>
+                    </div>
+                    <table class="data-table">
+                        <thead><tr><th>Activity Name</th><th>Actions</th></tr></thead>
+                        <tbody id="table-types-body"></tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- VIEW: TEACHER PORTAL -->
+            <section id="view-teacher" class="view-section hidden">
+                <header class="page-header">
+                    <h1>Teacher Portal</h1>
+                </header>
+                
+                <div class="selection-panel">
+                    <div class="form-group">
+                        <label>Select Form</label>
+                        <select id="teacher-select-grade" onchange="app.handleTeacherGradeChange()">
+                            <option value="">-- Select --</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Select Class</label>
+                        <select id="teacher-select-class" onchange="app.handleTeacherClassChange()" disabled>
+                            <option value="">-- Select Grade First --</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div id="teacher-student-list-container" class="hidden">
+                    <h3>Student List</h3>
+                    <div class="student-grid" id="teacher-student-grid">
+                        <!-- Student Cards injected here -->
+                    </div>
+                </div>
+            </section>
+
+            <!-- VIEW: STUDENT DETAIL (Teacher/Admin) -->
+            <section id="view-student-detail" class="view-section hidden">
+                <header class="page-header">
+                    <button class="btn btn-text" onclick="app.showView('teacher')">← Back to Class</button>
+                    <h1 id="detail-student-name">Student Name</h1>
+                    <span class="badge" id="detail-student-class">Class</span>
+                </header>
+
+                <div class="actions-bar">
+                    <h3>Co-Curricular History</h3>
+                    <button class="btn btn-primary" onclick="app.openEntryModal()">+ Add Entry</button>
+                </div>
+
+                <table class="data-table">
+                    <thead><tr><th>Date</th><th>Type</th><th>Subject/Activity</th><th>Recorded By</th><th>Actions</th></tr></thead>
+                    <tbody id="table-entries-body"></tbody>
+                </table>
+            </section>
+
+        </main>
+    </div>
+
+    <!-- MODALS -->
+
+    <!-- Class Modal -->
+    <div id="modal-class" class="modal hidden">
+        <div class="modal-content">
+            <h3>Manage Class</h3>
+            <form id="form-class">
+                <input type="hidden" id="class-id">
+                <div class="form-group">
+                    <label>Grade Level</label>
+                    <select id="class-grade" required></select>
+                </div>
+                <div class="form-group">
+                    <label>Class Name (e.g., 'Dedikasi')</label>
+                    <input type="text" id="class-name" required>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn" onclick="app.closeModal('modal-class')">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Student Modal -->
+    <div id="modal-student" class="modal hidden">
+        <div class="modal-content">
+            <h3>Manage Student</h3>
+            <form id="form-student">
+                <input type="hidden" id="student-id">
+                <div class="form-group">
+                    <label>Class</label>
+                    <select id="student-class-select" required></select>
+                </div>
+                <div class="form-group">
+                    <label>Full Name</label>
+                    <input type="text" id="student-name" required>
+                </div>
+                <div class="form-group">
+                    <label>Student No (Optional)</label>
+                    <input type="text" id="student-no">
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn" onclick="app.closeModal('modal-student')">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Type Modal -->
+    <div id="modal-type" class="modal hidden">
+        <div class="modal-content">
+            <h3>Manage Activity Type</h3>
+            <form id="form-type">
+                <input type="hidden" id="type-id">
+                <div class="form-group">
+                    <label>Activity Name</label>
+                    <input type="text" id="type-name" required>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn" onclick="app.closeModal('modal-type')">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Entry Modal -->
+    <div id="modal-entry" class="modal hidden">
+        <div class="modal-content">
+            <h3>Add Achievement</h3>
+            <form id="form-entry">
+                <input type="hidden" id="entry-id">
+                <input type="hidden" id="entry-student-id">
+                
+                <div class="form-group">
+                    <label>Date</label>
+                    <input type="date" id="entry-date" required>
+                </div>
+                
+                <div class="form-group">
+                    <label>Type</label>
+                    <select id="entry-type" required></select>
+                </div>
+                
+                <div class="form-group">
+                    <label>Subject / Description</label>
+                    <input type="text" id="entry-subject" required minlength="3" placeholder="e.g., Gold Medal in Debate">
+                </div>
+
+                <div class="modal-actions">
+                    <button type="button" class="btn" onclick="app.closeModal('modal-entry')">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Record</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
