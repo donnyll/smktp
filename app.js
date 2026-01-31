@@ -3,7 +3,7 @@
  * REPLACE THESE WITH YOUR VERCEL/SUPABASE KEYS BEFORE DEPLOYING
  */
 const SUPABASE_URL = 'https://kjvterwsbnaliyxvbjqt.supabase.co';
-const SUPABASE_ANON_KEY = 'sb_publishable_WNw2q07rMVjKghRBYiyVAw_NC9DAcEp';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtqdnRlcndzYm5hbGl5eHZianF0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk4MzYxMzEsImV4cCI6MjA4NTQxMjEzMX0.NnhnXluFThfUrd4OVBHvwb-QV_CBPSOpDMeV7vqwYXE';
 
 const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
