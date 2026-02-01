@@ -3,8 +3,8 @@
    2) Run schema.sql in Supabase SQL Editor
    3) Put your URL + anon key below
 */
-const SUPABASE_URL = "https://dflpaypdadctuhrcmavq.supabase.co";
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRmbHBheXBkYWRjdHVocmNtYXZxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk5MTcwMTcsImV4cCI6MjA4NTQ5MzAxN30.YZVfciWmp7s0NofEtjGayb175RT1lZsLVoMuzZDjfdc";
+const SUPABASE_URL = "https://oeotoszsrxfsautcshcb.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9lb3Rvc3pzcnhmc2F1dGNzaGNiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk5MjA1MDIsImV4cCI6MjA4NTQ5NjUwMn0.okSwQfgKVVq_51OgtFJ08vOAGEOrQ9lSh-_KCrJvvxk";
 
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
