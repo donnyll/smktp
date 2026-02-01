@@ -86,6 +86,11 @@ const entryDate = $("#entry-date");
 const entryType = $("#entry-type");
 const tblEntriesBody = $("#tbl-entries tbody");
 
+/* Export buttons */
+const btnExportAdmin = $("#btn-export-admin");
+const btnExportTeacher = $("#btn-export-teacher");
+const btnExportStudent = $("#btn-export-student");
+
 /* Modal */
 const modal = $("#modal");
 const modalForm = $("#modal-form");
@@ -409,6 +414,227 @@ async function updateEntry(id, payload) {
 async function deleteEntry(id) {
   const { error } = await sb.from("cocurricular_entries").delete().eq("id", id);
   if (error) throw error;
+}
+
+/* ========= EXPORT CSV (Admin + Teacher) ========= */
+function csvEscape(v) {
+  if (v === null || v === undefined) return "";
+  const s = String(v);
+  if (/[",\n\r]/.test(s)) return `"${s.replaceAll('"', '""')}"`;
+  return s;
+}
+
+function buildCSV(headers, rows) {
+  const head = headers.map(csvEscape).join(",");
+  const lines = rows.map(r => headers.map(h => csvEscape(r[h])).join(","));
+  return [head, ...lines].join("\n");
+}
+
+function downloadTextFile(filename, content, mime = "text/csv;charset=utf-8") {
+  const blob = new Blob([content], { type: mime });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+function tsForFile() {
+  const d = new Date();
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}_${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
+}
+
+async function fetchAllRows(table, select = "*", orderCol = "id", ascending = true, pageSize = 1000, applyFilters = null) {
+  let all = [];
+  let from = 0;
+
+  while (true) {
+    let q = sb.from(table).select(select).order(orderCol, { ascending });
+    if (applyFilters) q = applyFilters(q);
+
+    const { data, error } = await q.range(from, from + pageSize - 1);
+    if (error) throw error;
+
+    all.push(...(data || []));
+    if (!data || data.length < pageSize) break;
+
+    from += pageSize;
+  }
+
+  return all;
+}
+
+async function exportAllDataCSVs() {
+  setLoading(true);
+  try {
+    const grade_levels = await fetchAllRows("grade_levels", "id,name", "id", true);
+    const classes = await fetchAllRows("classes", "id,grade_level_id,name,created_at,updated_at", "created_at", true);
+    const students = await fetchAllRows("students", "id,class_id,full_name,student_no,created_at,updated_at", "created_at", true);
+    const types = await fetchAllRows("cocurricular_types", "id,name,created_at,updated_at", "created_at", true);
+    const entries = await fetchAllRows(
+      "cocurricular_entries",
+      "id,student_id,type_id,subject,activity_date,created_by,created_at,updated_at",
+      "created_at",
+      true
+    );
+
+    const gradeMap = new Map(grade_levels.map(g => [g.id, g.name]));
+    const classMap = new Map(classes.map(c => [c.id, c]));
+    const typeMap = new Map(types.map(t => [t.id, t.name]));
+    const studentMap = new Map(students.map(s => [s.id, s]));
+
+    // classes.csv
+    const classRows = classes.map(c => ({
+      id: c.id,
+      grade_level_id: c.grade_level_id,
+      grade_name: gradeMap.get(c.grade_level_id) || "",
+      name: c.name,
+      created_at: c.created_at,
+      updated_at: c.updated_at
+    }));
+    const classesCSV = buildCSV(
+      ["id","grade_level_id","grade_name","name","created_at","updated_at"],
+      classRows
+    );
+
+    // students.csv
+    const studentRows = students.map(s => {
+      const cls = classMap.get(s.class_id);
+      const gradeId = cls?.grade_level_id ?? "";
+      return {
+        id: s.id,
+        class_id: s.class_id,
+        class_name: cls?.name || "",
+        grade_level_id: gradeId,
+        grade_name: gradeId ? (gradeMap.get(gradeId) || "") : "",
+        full_name: s.full_name,
+        student_no: s.student_no || "",
+        created_at: s.created_at,
+        updated_at: s.updated_at
+      };
+    });
+    const studentsCSV = buildCSV(
+      ["id","class_id","class_name","grade_level_id","grade_name","full_name","student_no","created_at","updated_at"],
+      studentRows
+    );
+
+    // types.csv
+    const typeRows = types.map(t => ({
+      id: t.id,
+      name: t.name,
+      created_at: t.created_at,
+      updated_at: t.updated_at
+    }));
+    const typesCSV = buildCSV(
+      ["id","name","created_at","updated_at"],
+      typeRows
+    );
+
+    // entries.csv (flatten)
+    const entryRows = entries.map(e => {
+      const s = studentMap.get(e.student_id);
+      const cls = s ? classMap.get(s.class_id) : null;
+      const gradeId = cls?.grade_level_id ?? "";
+      return {
+        id: e.id,
+        activity_date: e.activity_date,
+        subject: e.subject,
+        type_id: e.type_id,
+        type_name: typeMap.get(e.type_id) || "",
+        student_id: e.student_id,
+        student_name: s?.full_name || "",
+        student_no: s?.student_no || "",
+        class_id: s?.class_id || "",
+        class_name: cls?.name || "",
+        grade_level_id: gradeId,
+        grade_name: gradeId ? (gradeMap.get(gradeId) || "") : "",
+        created_by: e.created_by,
+        created_at: e.created_at,
+        updated_at: e.updated_at
+      };
+    });
+
+    entryRows.sort((a, b) => {
+      const g = String(a.grade_level_id).localeCompare(String(b.grade_level_id));
+      if (g !== 0) return g;
+      const c = String(a.class_name).localeCompare(String(b.class_name));
+      if (c !== 0) return c;
+      const s = String(a.student_name).localeCompare(String(b.student_name));
+      if (s !== 0) return s;
+      return String(b.activity_date).localeCompare(String(a.activity_date));
+    });
+
+    const entriesCSV = buildCSV(
+      ["id","activity_date","subject","type_id","type_name","student_id","student_name","student_no","class_id","class_name","grade_level_id","grade_name","created_by","created_at","updated_at"],
+      entryRows
+    );
+
+    const stamp = tsForFile();
+
+    downloadTextFile(`classes_${stamp}.csv`, classesCSV);
+    setTimeout(() => downloadTextFile(`students_${stamp}.csv`, studentsCSV), 150);
+    setTimeout(() => downloadTextFile(`types_${stamp}.csv`, typesCSV), 300);
+    setTimeout(() => downloadTextFile(`entries_${stamp}.csv`, entriesCSV), 450);
+
+    toast("Export", "CSV downloaded (classes, students, types, entries).", "ok", 3500);
+  } catch (err) {
+    toast("Export failed", err.message || "Could not export CSV.", "err");
+  } finally {
+    setLoading(false);
+  }
+}
+
+async function exportStudentEntriesCSV(studentId) {
+  if (!studentId) {
+    toast("Export", "No student selected.", "warn");
+    return;
+  }
+
+  setLoading(true);
+  try {
+    const types = await fetchAllRows("cocurricular_types", "id,name", "name", true);
+    const typeMap = new Map(types.map(t => [t.id, t.name]));
+
+    const entries = await fetchAllRows(
+      "cocurricular_entries",
+      "id,student_id,type_id,subject,activity_date,created_by,created_at,updated_at",
+      "created_at",
+      true,
+      1000,
+      (q) => q.eq("student_id", studentId)
+    );
+
+    const rows = entries.map(e => ({
+      id: e.id,
+      activity_date: e.activity_date,
+      type_id: e.type_id,
+      type_name: typeMap.get(e.type_id) || "",
+      subject: e.subject,
+      created_by: e.created_by,
+      created_at: e.created_at,
+      updated_at: e.updated_at
+    }));
+
+    rows.sort((a, b) => String(b.activity_date).localeCompare(String(a.activity_date)));
+
+    const csv = buildCSV(
+      ["id","activity_date","type_id","type_name","subject","created_by","created_at","updated_at"],
+      rows
+    );
+
+    const stamp = tsForFile();
+    downloadTextFile(`student_entries_${studentId}_${stamp}.csv`, csv);
+
+    toast("Export", "Student entries CSV downloaded.", "ok");
+  } catch (err) {
+    toast("Export failed", err.message || "Could not export student CSV.", "err");
+  } finally {
+    setLoading(false);
+  }
 }
 
 /* ========= RENDERERS ========= */
@@ -770,6 +996,17 @@ logoutBtn.addEventListener("click", async () => {
   } finally {
     setLoading(false);
   }
+});
+
+/* Export click handlers */
+btnExportAdmin?.addEventListener("click", async () => {
+  await exportAllDataCSVs();
+});
+btnExportTeacher?.addEventListener("click", async () => {
+  await exportAllDataCSVs();
+});
+btnExportStudent?.addEventListener("click", async () => {
+  await exportStudentEntriesCSV(state.selectedStudent?.id);
 });
 
 goSignupBtn.addEventListener("click", () => signupPanel.classList.remove("hidden"));
@@ -1219,7 +1456,7 @@ backTeacherBtn.addEventListener("click", async () => {
   await refreshAllTeacher();
 });
 
-/* Add entry */
+/* Add entry (date boleh apa-apa) */
 entryForm.addEventListener("submit", async (e) => {
   e.preventDefault();
   if (!state.selectedStudent) return;
@@ -1228,7 +1465,6 @@ entryForm.addEventListener("submit", async (e) => {
   const activity_date = entryDate.value;
   const type_id = entryType.value;
 
-  // Validation
   if (!subject || subject.length < 3) {
     toast("Validation", "Subject is required (min 3 chars).", "warn");
     entrySubject.focus();
@@ -1395,3 +1631,4 @@ async function init() {
 }
 
 init();
+

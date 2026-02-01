@@ -93,8 +93,13 @@
       <!-- ADMIN VIEW -->
       <section id="view-admin" class="view hidden">
         <div class="view-header">
-          <h1>Admin Console</h1>
-          <div class="muted">Manage Classes, Students, and Co-curricular Types.</div>
+          <div class="row space-between align-center">
+            <div>
+              <h1>Admin Console</h1>
+              <div class="muted">Manage Classes, Students, and Co-curricular Types.</div>
+            </div>
+            <button id="btn-export-admin" class="btn secondary">Export CSV (All)</button>
+          </div>
         </div>
 
         <div class="grid-2">
@@ -181,8 +186,13 @@
       <!-- TEACHER VIEW -->
       <section id="view-teacher" class="view hidden">
         <div class="view-header">
-          <h1>Teacher</h1>
-          <div class="muted">Select grade → class → student, then record achievements.</div>
+          <div class="row space-between align-center">
+            <div>
+              <h1>Teacher</h1>
+              <div class="muted">Select grade → class → student, then record achievements.</div>
+            </div>
+            <button id="btn-export-teacher" class="btn secondary">Export CSV (All)</button>
+          </div>
         </div>
 
         <div class="card">
@@ -223,13 +233,16 @@
             <h1 id="student-detail-title">Student</h1>
             <div id="student-detail-sub" class="muted"></div>
           </div>
-          <button id="btn-back-teacher" class="btn secondary">← Back</button>
+          <div class="row">
+            <button id="btn-export-student" class="btn secondary">Export CSV (Student)</button>
+            <button id="btn-back-teacher" class="btn secondary">← Back</button>
+          </div>
         </div>
 
         <div class="card">
           <div class="card-header">
             <h2>Add Co-Curricular Entry</h2>
-            <div class="muted small">Subject min 3 chars • Date required • Type required • (Optional) future dates blocked</div>
+            <div class="muted small">Subject min 3 chars • Date required • Type required</div>
           </div>
 
           <form id="form-entry" class="form">
