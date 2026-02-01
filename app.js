@@ -2,8 +2,8 @@
  * KONFIGURASI SUPABASE
  * Pastikan URL dan KEY anda betul.
  */
-const SUPABASE_URL = "https://kjvterwsbnaliyxvbjqt.supabase.co";
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtqdnRlcndzYm5hbGl5eHZianF0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk4MzYxMzEsImV4cCI6MjA4NTQxMjEzMX0.NnhnXluFThfUrd4OVBHvwb-QV_CBPSOpDMeV7vqwYXE";
+const SUPABASE_URL = "https://dflpaypdadctuhrcmavq.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRmbHBheXBkYWRjdHVocmNtYXZxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk5MTcwMTcsImV4cCI6MjA4NTQ5MzAxN30.YZVfciWmp7s0NofEtjGayb175RT1lZsLVoMuzZDjfdc";
 
 // Initialize Supabase Client
 let supabase;
