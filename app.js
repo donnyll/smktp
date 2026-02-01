@@ -5,651 +5,554 @@
 const SUPABASE_URL = "https://dflpaypdadctuhrcmavq.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRmbHBheXBkYWRjdHVocmNtYXZxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk5MTcwMTcsImV4cCI6MjA4NTQ5MzAxN30.YZVfciWmp7s0NofEtjGayb175RT1lZsLVoMuzZDjfdc";
 
-// Initialize Supabase Client dengan semakan ralat
-let supabase;
-if (window.supabase) {
-    supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-} else {
-    alert("Ralat Kritikal: Library Supabase tidak dimuatkan. Sila refresh atau semak internet.");
-}
+const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-const app = {
-    state: {
-        user: null,
-        profile: null,
-        grades: [], 
-        currentStudent: null,
+// --- APP STATE ---
+const state = {
+    user: null,
+    profile: null,
+    activeView: 'login',
+    admin: {
+        activeGrade: 1,
+        activeClass: null,
+        classes: [],
+        students: [],
+        types: []
     },
-
-    init: async () => {
-        console.log("Aplikasi dimulakan...");
-        
-        // --- PEMBAIKAN UTAMA DI SINI ---
-        // Kita setup event listener DAHULU sebelum buat kerja async (network).
-        // Ini memastikan butang Login sentiasa boleh ditekan.
-        app.setupEventListeners();
-
-        app.showLoading(true);
-
-        try {
-            // 1. Semak status login semasa (Session Check)
-            if (!supabase) throw new Error("Supabase Client not initialized");
-
-            const { data: { session }, error } = await supabase.auth.getSession();
-            
-            if (error) {
-                console.warn("Ralat sesi:", error.message);
-                // Jangan crash, cuma anggap user belum login
-            }
-
-            if (session) {
-                console.log("Sesi dijumpai:", session.user.email);
-                app.state.user = session.user;
-                
-                // Cuba tarik data
-                try {
-                    await app.fetchProfile();
-                    await app.fetchCommonData();
-                    app.routeUser();
-                } catch (dataErr) {
-                    console.error("Ralat memuatkan data pengguna:", dataErr);
-                    app.showView('login');
-                }
-            } else {
-                app.showView('login');
-            }
-
-            // 2. Listener untuk perubahan login/logout
-            supabase.auth.onAuthStateChange(async (event, session) => {
-                console.log("Auth Event:", event);
-                if (event === 'SIGNED_OUT') {
-                    app.state.user = null;
-                    app.state.profile = null;
-                    app.showView('login');
-                } else if (event === 'SIGNED_IN' && session) {
-                    // Logic backup jika flow manual handleLogin tidak jalan
-                    if (!app.state.user) { 
-                        app.state.user = session.user;
-                        await app.fetchProfile();
-                        app.routeUser();
-                    }
-                }
-            });
-
-        } catch (err) {
-            console.error("Init Error:", err);
-            // Jangan tunjuk toast error kepada user yang belum login, cuma bawa ke login page
-            app.showView('login'); 
-        } finally {
-            app.showLoading(false);
-        }
-    },
-
-    // --- PENGESAHAN (AUTHENTICATION) ---
-
-    handleLogin: async (e) => {
-        e.preventDefault();
-        console.log("Percubaan log masuk bermula..."); // Debugging log
-
-        const emailEl = document.getElementById('login-email');
-        const passEl = document.getElementById('login-password');
-
-        if (!emailEl || !passEl) {
-            console.error("Elemen form tidak dijumpai!");
-            return;
-        }
-
-        const email = emailEl.value;
-        const password = passEl.value;
-        
-        app.showLoading(true);
-        
-        try {
-            if (!supabase) throw new Error("Sambungan ke pangkalan data gagal.");
-
-            const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-            
-            if (error) throw error;
-            
-            console.log("Login berjaya:", data.user);
-            app.state.user = data.user;
-            
-            // Tarik profile sebelum tukar screen
-            await app.fetchProfile();
-            await app.fetchCommonData();
-            
-            app.routeUser();
-            app.toast('Berjaya log masuk!', 'success');
-            
-        } catch (error) {
-            console.error("Login Error:", error);
-            // Mesej error yang lebih mesra pengguna
-            let msg = error.message;
-            if (msg.includes("Invalid login credentials")) msg = "Emel atau kata laluan salah.";
-            if (msg.includes("Email not confirmed")) msg = "Sila sahkan emel anda dahulu.";
-            
-            app.toast(`Gagal Log Masuk: ${msg}`, 'error');
-        } finally {
-            app.showLoading(false);
-        }
-    },
-
-    handleLogout: async () => {
-        if(confirm("Log keluar?")) {
-            app.showLoading(true);
-            await supabase.auth.signOut();
-            app.showLoading(false);
-        }
-    },
-
-    fetchProfile: async () => {
-        if (!app.state.user) return;
-        
-        try {
-            const { data, error } = await supabase
-                .from('profiles')
-                .select('*')
-                .eq('id', app.state.user.id)
-                .single();
-            
-            if (error || !data) {
-                console.warn('Profile tidak dijumpai dalam DB. Menggunakan fallback.');
-                // FALLBACK:
-                const isLikelyAdmin = app.state.user.email.toLowerCase().includes('admin');
-                app.state.profile = { 
-                    role: isLikelyAdmin ? 'admin' : 'teacher', 
-                    full_name: app.state.user.email 
-                };
-            } else {
-                app.state.profile = data;
-            }
-            
-            // Kemaskini UI Sidebar
-            const roleDisplay = app.state.profile.role ? app.state.profile.role.toUpperCase() : 'USER';
-            const nameDisplay = app.state.profile.full_name || app.state.user.email;
-            
-            const nameEl = document.getElementById('nav-user-info');
-            if (nameEl) nameEl.innerText = `${nameDisplay} (${roleDisplay})`;
-
-        } catch (err) {
-            console.error("Critical Profile Error:", err);
-            app.state.profile = { role: 'teacher', full_name: 'User' };
-        }
-    },
-
-    routeUser: () => {
-        const sidebar = document.getElementById('sidebar');
-        if (sidebar) sidebar.classList.remove('hidden');
-
-        const role = app.state.profile?.role || 'teacher';
-        const isAdmin = role === 'admin';
-        
-        const navAdmin = document.getElementById('nav-admin');
-        
-        document.querySelectorAll('.nav-links a').forEach(a => a.classList.remove('active'));
-
-        if (isAdmin) {
-            if(navAdmin) navAdmin.classList.remove('hidden');
-            app.showView('admin');
-            app.loadAdminClasses();
-        } else {
-            if(navAdmin) navAdmin.classList.add('hidden');
-            app.showView('teacher');
-        }
-    },
-
-    // --- DATA UMUM (COMMON DATA) ---
-    
-    fetchCommonData: async () => {
-        const { data, error } = await supabase.from('grade_levels').select('*').order('id');
-        
-        if (!error && data) {
-            app.state.grades = data;
-            app.populateDropdown('class-grade', app.state.grades, 'id', 'name');
-            app.populateDropdown('teacher-select-grade', app.state.grades, 'id', 'name', true);
-            app.populateDropdown('admin-class-grade-filter', app.state.grades, 'id', 'name', true);
-        }
-    },
-
-    // --- PENGURUSAN PAPARAN (VIEW MANAGEMENT) ---
-
-    showView: (viewName) => {
-        document.querySelectorAll('.view-section').forEach(el => el.classList.add('hidden'));
-        
-        if (viewName === 'login') {
-            document.getElementById('sidebar').classList.add('hidden');
-            document.getElementById('view-login').classList.remove('hidden');
-            return;
-        }
-
-        const viewEl = document.getElementById(`view-${viewName}`);
-        if(viewEl) viewEl.classList.remove('hidden');
-
-        if (viewName === 'admin' && app.state.profile?.role !== 'admin') {
-            app.toast('Akses Disekat: Anda bukan Admin', 'error');
-            app.showView('teacher');
-        }
-    },
-
-    // --- LOGIK ADMIN ---
-
-    switchAdminTab: (tabName) => {
-        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-        const btn = document.querySelector(`.tab-btn[onclick*="${tabName}"]`);
-        if(btn) btn.classList.add('active');
-        
-        document.querySelectorAll('.admin-tab-content').forEach(d => d.classList.add('hidden'));
-        const content = document.getElementById(`admin-tab-${tabName}`);
-        if(content) content.classList.remove('hidden');
-
-        if (tabName === 'classes') app.loadAdminClasses();
-        if (tabName === 'students') app.loadAdminStudents();
-        if (tabName === 'types') app.loadAdminTypes();
-    },
-
-    loadAdminClasses: async () => {
-        const gradeFilter = document.getElementById('admin-class-grade-filter')?.value;
-        let query = supabase.from('classes').select('*, grade_levels(name)');
-        if (gradeFilter) query = query.eq('grade_level_id', gradeFilter);
-        
-        const { data, error } = await query.order('name');
-
-        if (error) return app.toast(error.message, 'error');
-
-        const tbody = document.getElementById('table-classes-body');
-        if (!tbody) return;
-        
-        tbody.innerHTML = '';
-        if(!data || data.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; padding:20px;">Tiada kelas dijumpai.</td></tr>';
-            return;
-        }
-
-        data.forEach(cls => {
-            const tr = document.createElement('tr');
-            tr.innerHTML = `
-                <td><span class="badge">${cls.grade_levels?.name || '-'}</span></td>
-                <td>${cls.name}</td>
-                <td style="text-align:right">
-                    <button class="btn btn-danger-sm" onclick="app.deleteClass('${cls.id}')">Padam</button>
-                </td>
-            `;
-            tbody.appendChild(tr);
-        });
-    },
-
-    handleClassSubmit: async (e) => {
-        e.preventDefault();
-        app.showLoading(true);
-        const gradeId = document.getElementById('class-grade').value;
-        const name = document.getElementById('class-name').value;
-        
-        const { error } = await supabase.from('classes').insert({ grade_level_id: gradeId, name });
-        app.showLoading(false);
-        
-        if (error) app.toast(error.message, 'error');
-        else {
-            app.toast('Kelas berjaya ditambah', 'success');
-            app.closeModal('modal-class');
-            app.loadAdminClasses();
-        }
-    },
-
-    deleteClass: async (id) => {
-        if (!confirm('AWAS: Padam kelas ini? Semua pelajar di dalamnya akan dibuang.')) return;
-        const { error } = await supabase.from('classes').delete().eq('id', id);
-        if (error) app.toast(error.message, 'error');
-        else app.loadAdminClasses();
-    },
-
-    loadAdminStudents: async () => {
-        const classFilterEl = document.getElementById('admin-student-class-filter');
-        const studentClassSelect = document.getElementById('student-class-select');
-        
-        if (classFilterEl && classFilterEl.children.length <= 1) {
-            const {data} = await supabase.from('classes').select('*').order('name');
-            if(data) {
-                app.populateDropdown('admin-student-class-filter', data, 'id', 'name', true);
-                app.populateDropdown('student-class-select', data, 'id', 'name');
-            }
-        }
-
-        const classFilter = classFilterEl?.value;
-        const tbody = document.getElementById('table-students-body');
-        if (!tbody) return;
-
-        if (!classFilter) {
-            tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; color:#888;">Sila pilih kelas untuk melihat pelajar.</td></tr>';
-            return;
-        }
-
-        app.showLoading(true);
-        const { data, error } = await supabase.from('students').select('*').eq('class_id', classFilter).order('full_name');
-        app.showLoading(false);
-
-        if (error) return app.toast(error.message, 'error');
-
-        tbody.innerHTML = '';
-        if(!data || data.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;">Tiada pelajar dalam kelas ini.</td></tr>';
-            return;
-        }
-
-        data.forEach(stu => {
-            const tr = document.createElement('tr');
-            tr.innerHTML = `
-                <td>${stu.student_no || '-'}</td>
-                <td>${stu.full_name}</td>
-                <td style="text-align:right">
-                    <button class="btn btn-danger-sm" onclick="app.deleteStudent('${stu.id}')">Padam</button>
-                </td>
-            `;
-            tbody.appendChild(tr);
-        });
-    },
-
-    handleStudentSubmit: async (e) => {
-        e.preventDefault();
-        app.showLoading(true);
-        const classId = document.getElementById('student-class-select').value;
-        const fullName = document.getElementById('student-name').value;
-        const studentNo = document.getElementById('student-no').value || null;
-
-        const { error } = await supabase.from('students').insert({ class_id: classId, full_name: fullName, student_no: studentNo });
-        app.showLoading(false);
-
-        if (error) app.toast(error.message, 'error');
-        else {
-            app.toast('Pelajar ditambah', 'success');
-            app.closeModal('modal-student');
-            app.loadAdminStudents();
-        }
-    },
-
-    deleteStudent: async (id) => {
-        if (!confirm('Padam pelajar ini?')) return;
-        const { error } = await supabase.from('students').delete().eq('id', id);
-        if (error) app.toast(error.message, 'error');
-        else app.loadAdminStudents();
-    },
-
-    loadAdminTypes: async () => {
-        const { data, error } = await supabase.from('cocurricular_types').select('*').order('name');
-        if (error) return app.toast(error.message, 'error');
-        
-        const tbody = document.getElementById('table-types-body');
-        if (!tbody) return;
-        tbody.innerHTML = '';
-        
-        if (data) {
-            data.forEach(type => {
-                const tr = document.createElement('tr');
-                tr.innerHTML = `
-                    <td>${type.name}</td>
-                    <td style="text-align:right">
-                        <button class="btn btn-danger-sm" onclick="app.deleteType('${type.id}')">Padam</button>
-                    </td>
-                `;
-                tbody.appendChild(tr);
-            });
-        }
-    },
-
-    handleTypeSubmit: async (e) => {
-        e.preventDefault();
-        const name = document.getElementById('type-name').value;
-        const { error } = await supabase.from('cocurricular_types').insert({ name });
-        if (error) app.toast(error.message, 'error');
-        else {
-            app.toast('Jenis aktiviti ditambah', 'success');
-            app.closeModal('modal-type');
-            app.loadAdminTypes();
-        }
-    },
-
-    deleteType: async (id) => {
-        if (!confirm('Padam kategori aktiviti ini?')) return;
-        const { error } = await supabase.from('cocurricular_types').delete().eq('id', id);
-        if (error) app.toast(error.message, 'error');
-        else app.loadAdminTypes();
-    },
-
-    // --- LOGIK GURU (TEACHER) ---
-
-    handleTeacherGradeChange: async () => {
-        const gradeId = document.getElementById('teacher-select-grade').value;
-        const classSelect = document.getElementById('teacher-select-class');
-        
-        classSelect.innerHTML = '<option value="">Memuatkan...</option>';
-        classSelect.disabled = true;
-
-        if (!gradeId) {
-            classSelect.innerHTML = '<option value="">-- Pilih Tingkatan Dahulu --</option>';
-            return;
-        }
-
-        const { data, error } = await supabase.from('classes').select('*').eq('grade_level_id', gradeId).order('name');
-        if (error) return app.toast(error.message, 'error');
-
-        app.populateDropdown('teacher-select-class', data, 'id', 'name', true);
-        classSelect.disabled = false;
-        document.getElementById('teacher-student-list-container').classList.add('hidden');
-    },
-
-    handleTeacherClassChange: async () => {
-        const classId = document.getElementById('teacher-select-class').value;
-        if (!classId) return;
-
-        app.showLoading(true);
-        const { data, error } = await supabase.from('students').select('*').eq('class_id', classId).order('full_name');
-        app.showLoading(false);
-
-        if (error) return app.toast(error.message, 'error');
-
-        const grid = document.getElementById('teacher-student-grid');
-        grid.innerHTML = '';
-        
-        if(!data || data.length === 0) {
-            grid.innerHTML = '<p style="color:#666; col-span:3;">Tiada pelajar dalam kelas ini.</p>';
-        } else {
-            data.forEach(stu => {
-                const card = document.createElement('div');
-                card.className = 'student-card';
-                const initial = stu.full_name ? stu.full_name.charAt(0).toUpperCase() : '?';
-                card.innerHTML = `
-                    <div class="avatar">${initial}</div>
-                    <h4 style="font-size:1rem; margin-bottom:5px;">${stu.full_name}</h4>
-                    <p style="color:#6b7280; font-size:0.8rem;">${stu.student_no || 'Tiada No. Pelajar'}</p>
-                `;
-                card.onclick = () => app.openStudentDetail(stu);
-                grid.appendChild(card);
-            });
-        }
-
-        document.getElementById('teacher-student-list-container').classList.remove('hidden');
-    },
-
-    openStudentDetail: async (student) => {
-        app.state.currentStudent = student;
-        document.getElementById('detail-student-name').innerText = student.full_name;
-        document.getElementById('detail-student-class').innerText = 'Memuatkan...'; 
-        
-        const { data } = await supabase.from('classes').select('name').eq('id', student.class_id).single();
-        if(data) document.getElementById('detail-student-class').innerText = data.name;
-
-        app.showView('student-detail');
-        app.loadStudentEntries(student.id);
-    },
-
-    loadStudentEntries: async (studentId) => {
-        app.showLoading(true);
-        const { data, error } = await supabase
-            .from('cocurricular_entries')
-            .select(`*, cocurricular_types (name), profiles (full_name)`)
-            .eq('student_id', studentId)
-            .order('activity_date', { ascending: false });
-        app.showLoading(false);
-
-        if (error) return app.toast(error.message, 'error');
-
-        const tbody = document.getElementById('table-entries-body');
-        tbody.innerHTML = '';
-
-        if(!data || data.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:20px;">Tiada rekod pencapaian.</td></tr>';
-            return;
-        }
-
-        const currentUserId = app.state.user.id;
-        const isAdmin = app.state.profile?.role === 'admin';
-
-        data.forEach(entry => {
-            const canEdit = isAdmin || entry.created_by === currentUserId;
-            
-            const tr = document.createElement('tr');
-            tr.innerHTML = `
-                <td>${entry.activity_date}</td>
-                <td><span class="badge">${entry.cocurricular_types?.name || 'Umum'}</span></td>
-                <td>${entry.subject}</td>
-                <td>${entry.profiles?.full_name || 'Tidak diketahui'}</td>
-                <td style="text-align:right">
-                    ${canEdit ? `<button class="btn btn-danger-sm" onclick="app.deleteEntry('${entry.id}')">Padam</button>` : '<i class="ph ph-lock-key" style="color:#ccc;"></i>'}
-                </td>
-            `;
-            tbody.appendChild(tr);
-        });
-    },
-
-    openEntryModal: async () => {
-        const { data } = await supabase.from('cocurricular_types').select('*').order('name');
-        if (data) {
-            app.populateDropdown('entry-type', data, 'id', 'name');
-        }
-        
-        document.getElementById('entry-date').valueAsDate = new Date();
-        document.getElementById('entry-student-id').value = app.state.currentStudent.id;
-        
-        app.openModal('modal-entry');
-    },
-
-    handleEntrySubmit: async (e) => {
-        e.preventDefault();
-        app.showLoading(true);
-        const student_id = document.getElementById('entry-student-id').value;
-        const type_id = document.getElementById('entry-type').value;
-        const activity_date = document.getElementById('entry-date').value;
-        const subject = document.getElementById('entry-subject').value;
-
-        const { error } = await supabase.from('cocurricular_entries').insert({
-            student_id,
-            type_id,
-            activity_date,
-            subject
-        });
-        app.showLoading(false);
-
-        if (error) app.toast(error.message, 'error');
-        else {
-            app.toast('Pencapaian direkodkan!', 'success');
-            app.closeModal('modal-entry');
-            app.loadStudentEntries(student_id);
-        }
-    },
-
-    deleteEntry: async (id) => {
-        if (!confirm('Padam rekod ini?')) return;
-        const { error } = await supabase.from('cocurricular_entries').delete().eq('id', id);
-        if (error) app.toast(error.message, 'error');
-        else app.loadStudentEntries(app.state.currentStudent.id);
-    },
-
-    // --- PEMBANTU UI (UI HELPERS) ---
-
-    setupEventListeners: () => {
-        console.log("Menetapkan Event Listeners...");
-        
-        const loginForm = document.getElementById('login-form');
-        if (loginForm) {
-            // Kita buang listener lama dahulu untuk elak double submit (safety)
-            loginForm.removeEventListener('submit', app.handleLogin);
-            loginForm.addEventListener('submit', app.handleLogin);
-        } else {
-            console.error("Login form tidak dijumpai di DOM");
-        }
-        
-        const formClass = document.getElementById('form-class');
-        if (formClass) formClass.addEventListener('submit', app.handleClassSubmit);
-
-        const formStudent = document.getElementById('form-student');
-        if (formStudent) formStudent.addEventListener('submit', app.handleStudentSubmit);
-
-        const formType = document.getElementById('form-type');
-        if (formType) formType.addEventListener('submit', app.handleTypeSubmit);
-
-        const formEntry = document.getElementById('form-entry');
-        if (formEntry) formEntry.addEventListener('submit', app.handleEntrySubmit);
-    },
-
-    populateDropdown: (elementId, data, valueKey, textKey, includePlaceholder = false) => {
-        const select = document.getElementById(elementId);
-        if (!select) return; 
-        
-        select.innerHTML = '';
-        if (includePlaceholder) {
-            const opt = document.createElement('option');
-            opt.value = '';
-            opt.text = '-- Sila Pilih --';
-            select.appendChild(opt);
-        }
-        if (data && Array.isArray(data)) {
-            data.forEach(item => {
-                const opt = document.createElement('option');
-                opt.value = item[valueKey];
-                opt.text = item[textKey];
-                select.appendChild(opt);
-            });
-        }
-    },
-
-    openModal: (id) => {
-        const el = document.getElementById(id);
-        if (el) el.classList.remove('hidden');
-    },
-
-    closeModal: (id) => {
-        const el = document.getElementById(id);
-        if (el) {
-            el.classList.add('hidden');
-            const form = el.querySelector('form');
-            if (form) form.reset();
-        }
-    },
-
-    showLoading: (isLoading) => {
-        const overlay = document.getElementById('loading-overlay');
-        if (overlay) {
-            if (isLoading) overlay.classList.remove('hidden');
-            else overlay.classList.add('hidden');
-        }
-    },
-
-    toast: (message, type = 'success') => {
-        const container = document.getElementById('toast-container');
-        if (!container) return;
-        
-        const el = document.createElement('div');
-        el.className = `toast ${type}`;
-        
-        const icon = type === 'success' ? '<i class="ph ph-check-circle" style="font-size:1.2rem"></i>' : '<i class="ph ph-warning-circle" style="font-size:1.2rem"></i>';
-        
-        el.innerHTML = `${icon} <span>${message}</span>`;
-        container.appendChild(el);
-        setTimeout(() => {
-            el.style.opacity = '0';
-            setTimeout(() => el.remove(), 300);
-        }, 3000);
+    teacher: {
+        activeGrade: 1,
+        activeClass: null,
+        activeStudent: null,
+        students: [],
+        history: []
     }
 };
 
-// Mulakan Aplikasi
-document.addEventListener('DOMContentLoaded', app.init);
+// --- ROUTING ---
+const router = {
+    views: ['login', 'signup', 'admin', 'teacher', 'student-detail', 'unauthorized'],
+    
+    async navigate(viewId, params = {}) {
+        // Auth Guards
+        if (viewId === 'admin' && state.profile?.role !== 'admin') {
+            viewId = 'unauthorized';
+        }
+
+        this.views.forEach(v => {
+            const el = document.getElementById(`view-${v}`);
+            if (el) el.classList.add('hidden');
+        });
+
+        const target = document.getElementById(`view-${viewId}`);
+        if (target) target.classList.remove('hidden');
+        
+        state.activeView = viewId;
+        
+        // Navigation visual update
+        document.querySelectorAll('.nav-btn').forEach(btn => {
+            btn.classList.remove('active');
+            if (btn.id === `nav-${viewId}`) btn.classList.add('active');
+        });
+
+        // Lifecycle Hooks
+        if (viewId === 'admin') await admin.init();
+        if (viewId === 'teacher') await teacher.init();
+    }
+};
+
+// --- AUTH MODULE ---
+const auth = {
+    async init() {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
+            await this.handleLoginSuccess(session.user);
+        } else {
+            router.navigate('login');
+        }
+
+        // Listen for auth changes
+        supabase.auth.onAuthStateChange(async (event, session) => {
+            if (event === 'SIGNED_IN' && session) {
+                await this.handleLoginSuccess(session.user);
+            } else if (event === 'SIGNED_OUT') {
+                state.user = null;
+                state.profile = null;
+                ui.toggleSidebar(false);
+                router.navigate('login');
+            }
+        });
+    },
+
+    async handleLoginSuccess(user) {
+        state.user = user;
+        const { data: profile, error } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', user.id)
+            .single();
+        
+        if (error) {
+            console.error("Profile error:", error);
+            return;
+        }
+
+        state.profile = profile;
+        document.getElementById('user-display').innerText = `${profile.full_name} (${profile.role})`;
+        
+        ui.toggleSidebar(true);
+        if (profile.role === 'admin') {
+            document.getElementById('nav-admin').classList.remove('hidden');
+            router.navigate('admin');
+        } else {
+            document.getElementById('nav-admin').classList.add('hidden');
+            router.navigate('teacher');
+        }
+    },
+
+    async login(email, password) {
+        ui.setLoading(true);
+        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        ui.setLoading(false);
+        if (error) ui.notify(error.message, 'error');
+    },
+
+    async signup(email, password, fullName) {
+        ui.setLoading(true);
+        const { error } = await supabase.auth.signUp({
+            email,
+            password,
+            options: { data: { full_name: fullName } }
+        });
+        ui.setLoading(false);
+        if (error) ui.notify(error.message, 'error');
+        else ui.notify("Registration successful! You can now login.", 'success');
+    },
+
+    async logout() {
+        await supabase.auth.signOut();
+    },
+
+    toggleSignup() {
+        const current = state.activeView;
+        router.navigate(current === 'login' ? 'signup' : 'login');
+    }
+};
+
+// --- ADMIN MODULE ---
+const admin = {
+    async init() {
+        ui.setLoading(true);
+        await this.loadInitialData();
+        this.renderGrades();
+        await this.loadClasses();
+        await this.loadTypes();
+        ui.setLoading(false);
+    },
+
+    async loadInitialData() {
+        const { data: grades } = await supabase.from('grade_levels').select('*').order('id');
+        this.grades = grades || [];
+    },
+
+    renderGrades() {
+        const select = document.getElementById('admin-grade-filter');
+        select.innerHTML = this.grades.map(g => `<option value="${g.id}">Form ${g.id}</option>`).join('');
+        select.value = state.admin.activeGrade;
+        select.onchange = (e) => {
+            state.admin.activeGrade = parseInt(e.target.value);
+            this.loadClasses();
+        };
+    },
+
+    async loadClasses() {
+        const { data, error } = await supabase
+            .from('classes')
+            .select('*')
+            .eq('grade_level_id', state.admin.activeGrade)
+            .order('name');
+        
+        state.admin.classes = data || [];
+        this.renderClasses();
+    },
+
+    renderClasses() {
+        const list = document.getElementById('admin-class-list');
+        list.innerHTML = state.admin.classes.map(c => `
+            <li class="p-3 flex justify-between items-center group cursor-pointer hover:bg-indigo-50 ${state.admin.activeClass?.id === c.id ? 'bg-indigo-50 border-r-4 border-indigo-600' : ''}" 
+                onclick="admin.selectClass('${c.id}')">
+                <span class="font-medium text-slate-700">${c.name}</span>
+                <div class="hidden group-hover:flex gap-2">
+                    <button onclick="event.stopPropagation(); admin.openClassModal('${c.id}')" class="text-xs text-blue-600 hover:underline">Edit</button>
+                    <button onclick="event.stopPropagation(); admin.deleteClass('${c.id}')" class="text-xs text-red-600 hover:underline">Del</button>
+                </div>
+            </li>
+        `).join('') || '<p class="p-4 text-xs text-gray-400">No classes found.</p>';
+    },
+
+    async selectClass(classId) {
+        state.admin.activeClass = state.admin.classes.find(c => c.id === classId);
+        document.getElementById('admin-active-class-name').innerText = state.admin.activeClass.name;
+        document.getElementById('btn-add-student').disabled = false;
+        this.renderClasses(); // Refresh to show highlight
+        this.loadStudents();
+    },
+
+    async loadStudents() {
+        if (!state.admin.activeClass) return;
+        const { data } = await supabase
+            .from('students')
+            .select('*')
+            .eq('class_id', state.admin.activeClass.id)
+            .order('full_name');
+        
+        state.admin.students = data || [];
+        this.renderStudents();
+    },
+
+    renderStudents() {
+        const tbody = document.getElementById('admin-student-table');
+        tbody.innerHTML = state.admin.students.map(s => `
+            <tr>
+                <td class="p-3 font-mono text-slate-500">${s.student_no || '-'}</td>
+                <td class="p-3 font-semibold">${s.full_name}</td>
+                <td class="p-3 text-right">
+                    <button onclick="admin.openStudentModal('${s.id}')" class="text-blue-600 mr-3">Edit</button>
+                    <button onclick="admin.deleteStudent('${s.id}')" class="text-red-600">Delete</button>
+                </td>
+            </tr>
+        `).join('') || '<tr><td colspan="3" class="p-8 text-center text-gray-400">No students enrolled.</td></tr>';
+    },
+
+    async loadTypes() {
+        const { data } = await supabase.from('cocurricular_types').select('*').order('name');
+        state.admin.types = data || [];
+        this.renderTypes();
+    },
+
+    renderTypes() {
+        const container = document.getElementById('admin-type-list');
+        container.innerHTML = state.admin.types.map(t => `
+            <div class="bg-gray-100 p-2 rounded text-xs flex justify-between items-center group">
+                <span class="truncate pr-2">${t.name}</span>
+                <button onclick="admin.deleteType('${t.id}')" class="hidden group-hover:block text-red-500 font-bold">×</button>
+            </div>
+        `).join('') || '<p class="text-gray-400 italic text-sm">No types defined.</p>';
+    },
+
+    // --- Modals & CRUD ---
+    openClassModal(id = null) {
+        const existing = id ? state.admin.classes.find(c => c.id === id) : null;
+        ui.showModal(
+            existing ? 'Edit Class' : 'Create Class',
+            `<div class="space-y-4">
+                <label class="block text-sm">Class Name (e.g. 1 Alpha)</label>
+                <input type="text" id="modal-field-1" value="${existing?.name || ''}" class="w-full p-2 border rounded">
+            </div>`,
+            async () => {
+                const name = document.getElementById('modal-field-1').value;
+                if (!name) return;
+                const payload = { name, grade_level_id: state.admin.activeGrade };
+                const req = id 
+                    ? supabase.from('classes').update(payload).eq('id', id)
+                    : supabase.from('classes').insert(payload);
+                const { error } = await req;
+                if (!error) { ui.closeModal(); this.loadClasses(); }
+                else ui.notify(error.message, 'error');
+            }
+        );
+    },
+
+    async deleteClass(id) {
+        if (!confirm("Delete class and all its student records?")) return;
+        const { error } = await supabase.from('classes').delete().eq('id', id);
+        if (!error) {
+            if (state.admin.activeClass?.id === id) state.admin.activeClass = null;
+            this.loadClasses();
+        }
+    },
+
+    openStudentModal(id = null) {
+        const existing = id ? state.admin.students.find(s => s.id === id) : null;
+        ui.showModal(
+            existing ? 'Edit Student' : 'Enroll Student',
+            `<div class="space-y-4">
+                <div>
+                    <label class="block text-sm mb-1">Full Name</label>
+                    <input type="text" id="modal-field-1" value="${existing?.full_name || ''}" class="w-full p-2 border rounded">
+                </div>
+                <div>
+                    <label class="block text-sm mb-1">Student No (Optional)</label>
+                    <input type="text" id="modal-field-2" value="${existing?.student_no || ''}" class="w-full p-2 border rounded">
+                </div>
+            </div>`,
+            async () => {
+                const full_name = document.getElementById('modal-field-1').value;
+                const student_no = document.getElementById('modal-field-2').value;
+                if (!full_name) return;
+                const payload = { full_name, student_no: student_no || null, class_id: state.admin.activeClass.id };
+                const req = id 
+                    ? supabase.from('students').update(payload).eq('id', id)
+                    : supabase.from('students').insert(payload);
+                const { error } = await req;
+                if (!error) { ui.closeModal(); this.loadStudents(); }
+                else ui.notify(error.message, 'error');
+            }
+        );
+    },
+
+    async deleteStudent(id) {
+        if (!confirm("Are you sure? All co-curricular history will be deleted.")) return;
+        const { error } = await supabase.from('students').delete().eq('id', id);
+        if (!error) this.loadStudents();
+    },
+
+    openTypeModal() {
+        ui.showModal('New Category', 
+            `<input type="text" id="modal-field-1" placeholder="e.g. Football, Debating" class="w-full p-2 border rounded">`,
+            async () => {
+                const name = document.getElementById('modal-field-1').value;
+                if (!name) return;
+                const { error } = await supabase.from('cocurricular_types').insert({ name });
+                if (!error) { ui.closeModal(); this.loadTypes(); }
+                else ui.notify(error.message, 'error');
+            }
+        );
+    },
+
+    async deleteType(id) {
+        const { error } = await supabase.from('cocurricular_types').delete().eq('id', id);
+        if (!error) this.loadTypes();
+        else ui.notify("Cannot delete category as it is currently in use by records.", "error");
+    }
+};
+
+// --- TEACHER MODULE ---
+const teacher = {
+    async init() {
+        ui.setLoading(true);
+        const { data: grades } = await supabase.from('grade_levels').select('*').order('id');
+        const { data: types } = await supabase.from('cocurricular_types').select('*').order('name');
+        
+        state.admin.types = types || []; // Used for entry dropdown
+        
+        const gSelect = document.getElementById('teacher-grade-select');
+        gSelect.innerHTML = grades.map(g => `<option value="${g.id}">Form ${g.id}</option>`).join('');
+        gSelect.value = state.teacher.activeGrade;
+        gSelect.onchange = (e) => this.handleGradeChange(parseInt(e.target.value));
+
+        await this.handleGradeChange(state.teacher.activeGrade);
+        ui.setLoading(false);
+    },
+
+    async handleGradeChange(gradeId) {
+        state.teacher.activeGrade = gradeId;
+        const { data: classes } = await supabase
+            .from('classes')
+            .select('*')
+            .eq('grade_level_id', gradeId)
+            .order('name');
+        
+        const cSelect = document.getElementById('teacher-class-select');
+        cSelect.innerHTML = (classes || []).map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+        state.teacher.activeClass = classes?.[0]?.id || null;
+    },
+
+    async loadStudents() {
+        const classId = document.getElementById('teacher-class-select').value;
+        if (!classId) return;
+        
+        ui.setLoading(true);
+        const { data } = await supabase
+            .from('students')
+            .select('*')
+            .eq('class_id', classId)
+            .order('full_name');
+        
+        state.teacher.students = data || [];
+        this.renderStudents();
+        ui.setLoading(false);
+    },
+
+    renderStudents() {
+        const container = document.getElementById('teacher-student-container');
+        container.classList.remove('hidden');
+        container.innerHTML = state.teacher.students.map(s => `
+            <div class="bg-white p-4 rounded-lg shadow border border-transparent hover:border-indigo-300 cursor-pointer transition"
+                 onclick="teacher.viewStudentDetail('${s.id}')">
+                <div class="text-xs font-mono text-slate-400 mb-1">${s.student_no || 'NO ID'}</div>
+                <div class="font-bold text-lg">${s.full_name}</div>
+                <div class="text-indigo-600 text-sm mt-2">View History &rarr;</div>
+            </div>
+        `).join('') || '<div class="col-span-full text-center py-10 bg-gray-50 rounded">No students found in this class.</div>';
+    },
+
+    async viewStudentDetail(id) {
+        state.teacher.activeStudent = state.teacher.students.find(s => s.id === id);
+        router.navigate('student-detail');
+        
+        document.getElementById('detail-student-name').innerText = state.teacher.activeStudent.full_name;
+        document.getElementById('detail-student-meta').innerText = `${state.teacher.activeStudent.student_no || 'No ID'}`;
+        
+        await this.loadHistory();
+    },
+
+    async loadHistory() {
+        const { data, error } = await supabase
+            .from('cocurricular_entries')
+            .select('*, cocurricular_types(name)')
+            .eq('student_id', state.teacher.activeStudent.id)
+            .order('activity_date', { ascending: false });
+        
+        state.teacher.history = data || [];
+        this.renderHistory();
+    },
+
+    renderHistory() {
+        const tbody = document.getElementById('history-table-body');
+        tbody.innerHTML = state.teacher.history.map(e => {
+            const isOwner = e.created_by === state.user.id || state.profile.role === 'admin';
+            return `
+                <tr>
+                    <td class="p-3 whitespace-nowrap">${new Date(e.activity_date).toLocaleDateString()}</td>
+                    <td class="p-3"><span class="px-2 py-1 bg-slate-100 rounded text-xs">${e.cocurricular_types.name}</span></td>
+                    <td class="p-3">${e.subject}</td>
+                    <td class="p-3 text-right">
+                        ${isOwner ? `
+                            <button onclick="teacher.openEntryModal('${e.id}')" class="text-blue-600 hover:underline mr-2">Edit</button>
+                            <button onclick="teacher.deleteEntry('${e.id}')" class="text-red-600 hover:underline">Del</button>
+                        ` : '<span class="text-gray-400 italic text-xs">Read Only</span>'}
+                    </td>
+                </tr>
+            `;
+        }).join('') || '<tr><td colspan="4" class="p-8 text-center text-gray-400 italic">No achievements recorded.</td></tr>';
+    },
+
+    openEntryModal(id = null) {
+        const existing = id ? state.teacher.history.find(e => e.id === id) : null;
+        const typeOptions = state.admin.types.map(t => `<option value="${t.id}" ${existing?.type_id === t.id ? 'selected' : ''}>${t.name}</option>`).join('');
+
+        ui.showModal(
+            existing ? 'Update Achievement' : 'Add New Achievement',
+            `<div class="space-y-4">
+                <div>
+                    <label class="block text-sm mb-1">Category</label>
+                    <select id="modal-field-1" class="w-full p-2 border rounded">${typeOptions}</select>
+                </div>
+                <div>
+                    <label class="block text-sm mb-1">Activity Date</label>
+                    <input type="date" id="modal-field-2" value="${existing?.activity_date || new Date().toISOString().split('T')[0]}" class="w-full p-2 border rounded">
+                </div>
+                <div>
+                    <label class="block text-sm mb-1">Description / Subject</label>
+                    <textarea id="modal-field-3" class="w-full p-2 border rounded" rows="3" placeholder="Min 3 chars">${existing?.subject || ''}</textarea>
+                </div>
+            </div>`,
+            async () => {
+                const type_id = document.getElementById('modal-field-1').value;
+                const activity_date = document.getElementById('modal-field-2').value;
+                const subject = document.getElementById('modal-field-3').value;
+
+                if (!subject || subject.length < 3) return ui.notify("Description too short", "error");
+
+                const payload = {
+                    student_id: state.teacher.activeStudent.id,
+                    type_id,
+                    activity_date,
+                    subject,
+                    created_by: state.user.id
+                };
+
+                const req = id 
+                    ? supabase.from('cocurricular_entries').update({ type_id, activity_date, subject }).eq('id', id)
+                    : supabase.from('cocurricular_entries').insert(payload);
+
+                const { error } = await req;
+                if (!error) { ui.closeModal(); this.loadHistory(); }
+                else ui.notify(error.message, 'error');
+            }
+        );
+    },
+
+    async deleteEntry(id) {
+        if (!confirm("Delete this record permanently?")) return;
+        const { error } = await supabase.from('cocurricular_entries').delete().eq('id', id);
+        if (!error) this.loadHistory();
+        else ui.notify(error.message, "error");
+    },
+
+    backToMain() {
+        router.navigate('teacher');
+    }
+};
+
+// --- UI UTILS ---
+const ui = {
+    setLoading(isLoading) {
+        document.getElementById('loading').classList.toggle('hidden', !isLoading);
+    },
+
+    notify(msg, type = 'success') {
+        const toast = document.getElementById('toast');
+        toast.innerText = msg;
+        toast.className = `fixed top-4 right-4 p-4 rounded shadow-lg transition-all duration-300 z-[100] ${type}`;
+        toast.classList.remove('hidden');
+        setTimeout(() => toast.classList.add('hidden'), 3000);
+    },
+
+    toggleSidebar(show) {
+        const sb = document.getElementById('sidebar');
+        const main = document.getElementById('main-content');
+        if (show) {
+            sb.classList.remove('hidden');
+            sb.classList.add('flex');
+            main.classList.add('md:ml-64');
+        } else {
+            sb.classList.add('hidden');
+            sb.classList.remove('flex');
+            main.classList.remove('md:ml-64');
+        }
+    },
+
+    showModal(title, contentHtml, onConfirm) {
+        document.getElementById('modal-title').innerText = title;
+        document.getElementById('modal-content').innerHTML = contentHtml;
+        const submitBtn = document.getElementById('modal-submit');
+        
+        // Clone and replace to remove old listeners
+        const newBtn = submitBtn.cloneNode(true);
+        submitBtn.parentNode.replaceChild(newBtn, submitBtn);
+        
+        newBtn.onclick = onConfirm;
+        document.getElementById('modal-container').classList.replace('hidden', 'flex');
+    },
+
+    closeModal() {
+        document.getElementById('modal-container').classList.replace('flex', 'hidden');
+    }
+};
+
+// --- INITIALIZATION ---
+window.addEventListener('DOMContentLoaded', () => {
+    // Check if Supabase keys are set
+    if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+        alert("Please set SUPABASE_URL and SUPABASE_ANON_KEY in app.js");
+        return;
+    }
+
+    // Attach form listeners
+    document.getElementById('form-login').onsubmit = (e) => {
+        e.preventDefault();
+        auth.login(document.getElementById('login-email').value, document.getElementById('login-password').value);
+    };
+
+    document.getElementById('form-signup').onsubmit = (e) => {
+        e.preventDefault();
+        auth.signup(
+            document.getElementById('signup-email').value,
+            document.getElementById('signup-password').value,
+            document.getElementById('signup-name').value
+        );
+    };
+
+    auth.init();
+});

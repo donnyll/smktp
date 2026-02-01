@@ -1,266 +1,200 @@
 <!DOCTYPE html>
-<html lang="ms">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sistem Pengurusan Kokurikulum</title>
+    <title>Co-Curricular AMS</title>
     <link rel="stylesheet" href="styles.css">
-    <!-- Supabase JS -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <!-- Phosphor Icons -->
-    <script src="https://unpkg.com/@phosphor-icons/web"></script>
 </head>
-<body>
-
-    <!-- Loading Overlay -->
-    <div id="loading-overlay" class="hidden">
-        <div class="spinner"></div>
-    </div>
-
-    <!-- Toast Notifications -->
-    <div id="toast-container"></div>
-
-    <!-- Layout Wrapper -->
-    <div class="app-wrapper">
+<body class="bg-gray-50 text-gray-900 font-sans">
+    
+    <!-- Navigation Sidebar -->
+    <nav id="sidebar" class="hidden fixed left-0 top-0 h-full w-64 bg-slate-800 text-white p-6 flex-col">
+        <h1 class="text-xl font-bold mb-8 border-b border-slate-700 pb-4">School AMS</h1>
         
-        <!-- Sidebar Navigation (Hidden on Login) -->
-        <nav id="sidebar" class="hidden">
-            <div class="brand"><i class="ph ph-graduation-cap"></i> SchoolSys</div>
-            <div class="user-info" id="nav-user-info">Memuatkan...</div>
-            <ul class="nav-links">
-                <li id="nav-admin" class="hidden"><a href="#" onclick="app.showView('admin')">Admin Dashboard</a></li>
-                <li id="nav-teacher"><a href="#" onclick="app.showView('teacher')">Portal Guru</a></li>
-            </ul>
-            <div class="logout-section">
-                <button onclick="app.handleLogout()" class="btn btn-outline-danger">Log Keluar</button>
+        <div class="flex-grow space-y-2">
+            <button onclick="router.navigate('teacher')" id="nav-teacher" class="nav-btn w-full text-left px-4 py-2 rounded transition-colors hover:bg-slate-700">Teacher Portal</button>
+            <button onclick="router.navigate('admin')" id="nav-admin" class="nav-btn hidden w-full text-left px-4 py-2 rounded transition-colors hover:bg-slate-700">Admin Dashboard</button>
+        </div>
+
+        <div class="pt-4 border-t border-slate-700">
+            <div id="user-display" class="text-sm text-slate-400 mb-2 truncate"></div>
+            <button onclick="auth.logout()" class="w-full bg-red-600 hover:bg-red-700 text-white py-2 rounded transition-colors">Logout</button>
+        </div>
+    </nav>
+
+    <!-- Main Content Area -->
+    <main id="main-content" class="ml-0 p-8 transition-all duration-300">
+        
+        <!-- Loading Overlay -->
+        <div id="loading" class="fixed inset-0 bg-white/80 flex items-center justify-center z-50 hidden">
+            <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+        </div>
+
+        <!-- Notification Toast -->
+        <div id="toast" class="fixed top-4 right-4 p-4 rounded shadow-lg hidden transition-all duration-300 z-[100]"></div>
+
+        <!-- 1. Login View -->
+        <section id="view-login" class="max-w-md mx-auto mt-20 bg-white p-8 rounded-xl shadow-md hidden">
+            <h2 class="text-2xl font-bold mb-6 text-center">System Login</h2>
+            <form id="form-login" class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium mb-1">Email</label>
+                    <input type="email" id="login-email" required class="w-full p-2 border rounded focus:ring-2 focus:ring-indigo-500 outline-none">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-1">Password</label>
+                    <input type="password" id="login-password" required class="w-full p-2 border rounded focus:ring-2 focus:ring-indigo-500 outline-none">
+                </div>
+                <button type="submit" class="w-full bg-indigo-600 text-white py-2 rounded hover:bg-indigo-700 transition">Sign In</button>
+            </form>
+            <div class="mt-4 text-center">
+                <button onclick="auth.toggleSignup()" class="text-sm text-indigo-600 hover:underline">Register as Teacher</button>
             </div>
-        </nav>
+        </section>
 
-        <!-- Main Content Area -->
-        <main id="main-content">
+        <!-- 2. Registration View -->
+        <section id="view-signup" class="max-w-md mx-auto mt-20 bg-white p-8 rounded-xl shadow-md hidden">
+            <h2 class="text-2xl font-bold mb-6 text-center">Teacher Registration</h2>
+            <form id="form-signup" class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium mb-1">Full Name</label>
+                    <input type="text" id="signup-name" required class="w-full p-2 border rounded focus:ring-2 focus:ring-indigo-500 outline-none">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-1">Email</label>
+                    <input type="email" id="signup-email" required class="w-full p-2 border rounded focus:ring-2 focus:ring-indigo-500 outline-none">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-1">Password</label>
+                    <input type="password" id="signup-password" required minlength="6" class="w-full p-2 border rounded focus:ring-2 focus:ring-indigo-500 outline-none">
+                </div>
+                <button type="submit" class="w-full bg-green-600 text-white py-2 rounded hover:bg-green-700 transition">Create Account</button>
+            </form>
+            <div class="mt-4 text-center">
+                <button onclick="auth.toggleSignup()" class="text-sm text-indigo-600 hover:underline">Back to Login</button>
+            </div>
+        </section>
+
+        <!-- 3. Admin View -->
+        <section id="view-admin" class="hidden space-y-8 max-w-6xl mx-auto">
+            <header class="flex justify-between items-center border-b pb-4">
+                <h2 class="text-3xl font-bold text-slate-800">Administrator Console</h2>
+            </header>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <!-- Class Management -->
+                <div class="bg-white p-6 rounded-lg shadow col-span-1">
+                    <h3 class="font-bold text-lg mb-4">Classes</h3>
+                    <div class="flex gap-2 mb-4">
+                        <select id="admin-grade-filter" class="p-2 border rounded text-sm bg-gray-50 flex-grow"></select>
+                        <button onclick="admin.openClassModal()" class="bg-indigo-600 text-white px-3 rounded">+</button>
+                    </div>
+                    <ul id="admin-class-list" class="divide-y max-h-96 overflow-y-auto"></ul>
+                </div>
+
+                <!-- Student Management -->
+                <div class="bg-white p-6 rounded-lg shadow col-span-2">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="font-bold text-lg">Students in <span id="admin-active-class-name">-</span></h3>
+                        <button id="btn-add-student" onclick="admin.openStudentModal()" disabled class="bg-indigo-600 text-white px-4 py-1 rounded text-sm disabled:opacity-50">Add Student</button>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-sm">
+                            <thead>
+                                <tr class="bg-gray-50 text-left">
+                                    <th class="p-3">ID No</th>
+                                    <th class="p-3">Full Name</th>
+                                    <th class="p-3 text-right">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="admin-student-table" class="divide-y"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Co-curricular Types -->
+            <div class="bg-white p-6 rounded-lg shadow">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="font-bold text-lg">Activity Categories</h3>
+                    <button onclick="admin.openTypeModal()" class="bg-indigo-600 text-white px-4 py-1 rounded text-sm">Add Category</button>
+                </div>
+                <div id="admin-type-list" class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3"></div>
+            </div>
+        </section>
+
+        <!-- 4. Teacher View -->
+        <section id="view-teacher" class="hidden space-y-6 max-w-6xl mx-auto">
+            <h2 class="text-3xl font-bold text-slate-800">Teacher Portal</h2>
             
-            <!-- VIEW: LOGIN -->
-            <section id="view-login" class="view-section">
-                <div class="login-card">
-                    <div style="text-align: center; margin-bottom: 20px;">
-                        <i class="ph ph-student" style="font-size: 3rem; color: var(--primary);"></i>
-                    </div>
-                    <h2>Selamat Datang</h2>
-                    <p style="text-align: center; color: #6b7280; margin-bottom: 20px;">Sistem Pengurusan Kokurikulum</p>
-                    <form id="login-form">
-                        <div class="form-group">
-                            <label>Emel Pengguna</label>
-                            <input type="email" id="login-email" required placeholder="admin@sekolah.edu.my">
-                        </div>
-                        <div class="form-group">
-                            <label>Kata Laluan</label>
-                            <input type="password" id="login-password" required>
-                        </div>
-                        <button type="submit" class="btn btn-primary full-width">Log Masuk</button>
-                    </form>
-                    <p style="text-align: center; margin-top: 20px; font-size: 0.8rem; color: #6b7280;">Sila hubungi Admin jika terlupa kata laluan.</p>
+            <div class="bg-white p-6 rounded-lg shadow flex flex-wrap gap-4 items-end">
+                <div class="flex-grow min-w-[200px]">
+                    <label class="block text-sm font-medium mb-1">Select Form</label>
+                    <select id="teacher-grade-select" class="w-full p-2 border rounded"></select>
                 </div>
-            </section>
+                <div class="flex-grow min-w-[200px]">
+                    <label class="block text-sm font-medium mb-1">Select Class</label>
+                    <select id="teacher-class-select" class="w-full p-2 border rounded"></select>
+                </div>
+                <button onclick="teacher.loadStudents()" class="bg-indigo-600 text-white px-6 py-2 rounded hover:bg-indigo-700">Find Students</button>
+            </div>
 
-            <!-- VIEW: ADMIN DASHBOARD -->
-            <section id="view-admin" class="view-section hidden">
-                <header class="page-header">
-                    <h1>Pengurusan Admin</h1>
-                </header>
-                
-                <div class="tabs">
-                    <button class="tab-btn active" onclick="app.switchAdminTab('classes')">Kelas</button>
-                    <button class="tab-btn" onclick="app.switchAdminTab('students')">Pelajar</button>
-                    <button class="tab-btn" onclick="app.switchAdminTab('types')">Jenis Aktiviti</button>
+            <div id="teacher-student-container" class="hidden grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
+        </section>
+
+        <!-- 5. Student Detail / History View -->
+        <section id="view-student-detail" class="hidden space-y-6 max-w-5xl mx-auto">
+            <button onclick="teacher.backToMain()" class="text-indigo-600 hover:underline mb-2">&larr; Back to Class List</button>
+            
+            <div class="bg-white p-8 rounded-xl shadow-lg">
+                <div class="flex justify-between items-start mb-8">
+                    <div>
+                        <h2 id="detail-student-name" class="text-3xl font-bold">Student Name</h2>
+                        <p id="detail-student-meta" class="text-slate-500">Form 1 - Class Alpha</p>
+                    </div>
+                    <button onclick="teacher.openEntryModal()" class="bg-indigo-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-indigo-700">Add Achievement</button>
                 </div>
 
-                <!-- Admin Tab: Classes -->
-                <div id="admin-tab-classes" class="admin-tab-content">
-                    <div class="actions-bar">
-                        <select id="admin-class-grade-filter" onchange="app.loadAdminClasses()">
-                            <option value="">Semua Tingkatan</option>
-                        </select>
-                        <button class="btn btn-primary" onclick="app.openModal('modal-class')">Tambah Kelas</button>
-                    </div>
-                    <table class="data-table">
-                        <thead><tr><th>Tingkatan</th><th>Nama Kelas</th><th>Tindakan</th></tr></thead>
-                        <tbody id="table-classes-body"></tbody>
-                    </table>
-                </div>
-
-                <!-- Admin Tab: Students -->
-                <div id="admin-tab-students" class="admin-tab-content hidden">
-                    <div class="actions-bar">
-                        <select id="admin-student-class-filter" onchange="app.loadAdminStudents()">
-                            <option value="">Pilih Kelas...</option>
-                        </select>
-                        <button class="btn btn-primary" onclick="app.openModal('modal-student')">Tambah Pelajar</button>
-                    </div>
-                    <table class="data-table">
-                        <thead><tr><th>No. Pelajar</th><th>Nama</th><th>Tindakan</th></tr></thead>
-                        <tbody id="table-students-body"></tbody>
-                    </table>
-                </div>
-
-                <!-- Admin Tab: Types -->
-                <div id="admin-tab-types" class="admin-tab-content hidden">
-                    <div class="actions-bar">
-                        <button class="btn btn-primary" onclick="app.openModal('modal-type')">Tambah Jenis</button>
-                    </div>
-                    <table class="data-table">
-                        <thead><tr><th>Nama Aktiviti</th><th>Tindakan</th></tr></thead>
-                        <tbody id="table-types-body"></tbody>
-                    </table>
-                </div>
-            </section>
-
-            <!-- VIEW: TEACHER PORTAL -->
-            <section id="view-teacher" class="view-section hidden">
-                <header class="page-header">
-                    <h1>Portal Guru</h1>
-                </header>
-                
-                <div class="actions-bar" style="justify-content: flex-start; background: white; padding: 15px; border-radius: 8px; border: 1px solid var(--border);">
-                    <div class="form-group" style="margin-bottom: 0; flex: 1;">
-                        <label>Pilih Tingkatan</label>
-                        <select id="teacher-select-grade" onchange="app.handleTeacherGradeChange()">
-                            <option value="">-- Sila Pilih --</option>
-                        </select>
-                    </div>
-                    <div class="form-group" style="margin-bottom: 0; flex: 1;">
-                        <label>Pilih Kelas</label>
-                        <select id="teacher-select-class" onchange="app.handleTeacherClassChange()" disabled>
-                            <option value="">-- Pilih Tingkatan Dahulu --</option>
-                        </select>
+                <div class="border-t pt-6">
+                    <h3 class="text-lg font-bold mb-4">Achievement History</h3>
+                    <div class="overflow-x-auto">
+                        <table class="w-full border-collapse">
+                            <thead>
+                                <tr class="bg-gray-50 border-b text-left text-xs uppercase tracking-wider text-gray-500">
+                                    <th class="p-3">Date</th>
+                                    <th class="p-3">Category</th>
+                                    <th class="p-3">Subject / Description</th>
+                                    <th class="p-3 text-right">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="history-table-body" class="divide-y text-sm"></tbody>
+                        </table>
                     </div>
                 </div>
+            </div>
+        </section>
 
-                <div id="teacher-student-list-container" class="hidden">
-                    <h3 style="margin-top: 20px; color: var(--text-muted);">Senarai Pelajar</h3>
-                    <div class="student-grid" id="teacher-student-grid">
-                        <!-- Student Cards injected here -->
-                    </div>
-                </div>
-            </section>
+        <!-- 6. Unauthorized View -->
+        <section id="view-unauthorized" class="hidden text-center mt-20">
+            <div class="text-red-500 text-6xl mb-4">⚠️</div>
+            <h2 class="text-2xl font-bold">Access Denied</h2>
+            <p class="text-gray-600 mt-2">You do not have administrative privileges to view this page.</p>
+            <button onclick="router.navigate('teacher')" class="mt-4 bg-indigo-600 text-white px-4 py-2 rounded">Back to Portal</button>
+        </section>
 
-            <!-- VIEW: STUDENT DETAIL (Teacher/Admin) -->
-            <section id="view-student-detail" class="view-section hidden">
-                <header class="page-header">
-                    <div style="display: flex; align-items: center; gap: 10px;">
-                        <button class="btn btn-text" onclick="app.showView('teacher')"><i class="ph ph-arrow-left"></i> Kembali</button>
-                        <div>
-                            <h1 id="detail-student-name" style="margin-bottom: 0;">Nama Pelajar</h1>
-                            <span class="badge" id="detail-student-class">Kelas</span>
-                        </div>
-                    </div>
-                    <button class="btn btn-primary" onclick="app.openEntryModal()"><i class="ph ph-plus"></i> Rekod Pencapaian</button>
-                </header>
+    </main>
 
-                <table class="data-table">
-                    <thead><tr><th>Tarikh</th><th>Jenis</th><th>Pencapaian / Aktiviti</th><th>Direkod Oleh</th><th>Tindakan</th></tr></thead>
-                    <tbody id="table-entries-body"></tbody>
-                </table>
-            </section>
-
-        </main>
-    </div>
-
-    <!-- MODALS (Added 'hidden' class to all) -->
-
-    <!-- Class Modal -->
-    <div id="modal-class" class="modal hidden">
-        <div class="modal-content">
-            <h3>Urus Kelas</h3>
-            <form id="form-class">
-                <input type="hidden" id="class-id">
-                <div class="form-group">
-                    <label>Tingkatan</label>
-                    <select id="class-grade" required></select>
-                </div>
-                <div class="form-group">
-                    <label>Nama Kelas (Contoh: 'Dedikasi')</label>
-                    <input type="text" id="class-name" required>
-                </div>
-                <div class="modal-actions">
-                    <button type="button" class="btn" onclick="app.closeModal('modal-class')">Batal</button>
-                    <button type="submit" class="btn btn-primary">Simpan</button>
-                </div>
-            </form>
-        </div>
-    </div>
-
-    <!-- Student Modal -->
-    <div id="modal-student" class="modal hidden">
-        <div class="modal-content">
-            <h3>Urus Pelajar</h3>
-            <form id="form-student">
-                <input type="hidden" id="student-id">
-                <div class="form-group">
-                    <label>Kelas</label>
-                    <select id="student-class-select" required></select>
-                </div>
-                <div class="form-group">
-                    <label>Nama Penuh</label>
-                    <input type="text" id="student-name" required>
-                </div>
-                <div class="form-group">
-                    <label>No. Pelajar (Pilihan)</label>
-                    <input type="text" id="student-no">
-                </div>
-                <div class="modal-actions">
-                    <button type="button" class="btn" onclick="app.closeModal('modal-student')">Batal</button>
-                    <button type="submit" class="btn btn-primary">Simpan</button>
-                </div>
-            </form>
-        </div>
-    </div>
-
-    <!-- Type Modal -->
-    <div id="modal-type" class="modal hidden">
-        <div class="modal-content">
-            <h3>Urus Jenis Aktiviti</h3>
-            <form id="form-type">
-                <input type="hidden" id="type-id">
-                <div class="form-group">
-                    <label>Nama Aktiviti</label>
-                    <input type="text" id="type-name" required>
-                </div>
-                <div class="modal-actions">
-                    <button type="button" class="btn" onclick="app.closeModal('modal-type')">Batal</button>
-                    <button type="submit" class="btn btn-primary">Simpan</button>
-                </div>
-            </form>
-        </div>
-    </div>
-
-    <!-- Entry Modal -->
-    <div id="modal-entry" class="modal hidden">
-        <div class="modal-content">
-            <h3>Tambah Pencapaian</h3>
-            <form id="form-entry">
-                <input type="hidden" id="entry-id">
-                <input type="hidden" id="entry-student-id">
-                
-                <div class="form-group">
-                    <label>Tarikh</label>
-                    <input type="date" id="entry-date" required>
-                </div>
-                
-                <div class="form-group">
-                    <label>Jenis Aktiviti</label>
-                    <select id="entry-type" required></select>
-                </div>
-                
-                <div class="form-group">
-                    <label>Pencapaian / Keterangan</label>
-                    <input type="text" id="entry-subject" required minlength="3" placeholder="Contoh: Johan Pertandingan Debat">
-                </div>
-
-                <div class="modal-actions">
-                    <button type="button" class="btn" onclick="app.closeModal('modal-entry')">Batal</button>
-                    <button type="submit" class="btn btn-primary">Simpan Rekod</button>
-                </div>
-            </form>
+    <!-- Generic Modals -->
+    <div id="modal-container" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-[200]">
+        <div class="bg-white p-8 rounded-lg shadow-2xl max-w-lg w-full m-4">
+            <h2 id="modal-title" class="text-xl font-bold mb-4">Modal Title</h2>
+            <div id="modal-content"></div>
+            <div class="mt-6 flex justify-end gap-3">
+                <button onclick="ui.closeModal()" class="px-4 py-2 text-gray-600 hover:text-gray-900 font-medium">Cancel</button>
+                <button id="modal-submit" class="px-6 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 font-medium">Save Changes</button>
+            </div>
         </div>
     </div>
 
