@@ -1,8 +1,4 @@
-/* ========= CONFIG =========
-   1) Create Supabase project
-   2) Run schema.sql in Supabase SQL Editor
-   3) Put your URL + anon key below
-*/
+/* ========= CONFIG ========= */
 const SUPABASE_URL = "https://oeotoszsrxfsautcshcb.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9lb3Rvc3pzcnhmc2F1dGNzaGNiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk5MjA1MDIsImV4cCI6MjA4NTQ5NjUwMn0.okSwQfgKVVq_51OgtFJ08vOAGEOrQ9lSh-_KCrJvvxk";
 
@@ -110,26 +106,36 @@ function setLoading(on) {
 function toast(title, msg, type = "ok", ttl = 2800) {
   const el = document.createElement("div");
   el.className = `toast ${type}`;
+  // Added icons based on type for consistency
+  const icon = type === 'ok' ? '<i class="ph ph-check-circle"></i>' : 
+               type === 'err' ? '<i class="ph ph-warning"></i>' : 
+               '<i class="ph ph-info"></i>';
+               
   el.innerHTML = `
-    <div class="title">${escapeHtml(title)}</div>
-    <div class="msg">${escapeHtml(msg || "")}</div>
+    <div style="display:flex; gap:10px;">
+      <div style="font-size:20px; color:inherit; display:flex; align-items:center;">${icon}</div>
+      <div>
+        <div class="title">${escapeHtml(title)}</div>
+        <div class="msg">${escapeHtml(msg || "")}</div>
+      </div>
+    </div>
   `;
   toastContainer.appendChild(el);
   setTimeout(() => {
     el.style.opacity = "0";
-    el.style.transform = "translateY(-6px)";
-    setTimeout(() => el.remove(), 200);
+    el.style.transform = "translateX(20px)";
+    setTimeout(() => el.remove(), 300);
   }, ttl);
 }
 
 function showUnauthorized(message) {
-  unauthorizedEl.textContent = message;
+  const span = unauthorizedEl.querySelector('span');
+  if(span) span.textContent = message;
   unauthorizedEl.classList.remove("hidden");
 }
 
 function clearUnauthorized() {
   unauthorizedEl.classList.add("hidden");
-  unauthorizedEl.textContent = "";
 }
 
 function setActiveNav(key) {
@@ -229,7 +235,13 @@ function openModal({ title, submitText = "Save", fields = [], initial = {} }) {
     if (initVal !== undefined && initVal !== null) input.value = String(initVal);
 
     wrap.appendChild(label);
-    wrap.appendChild(input);
+    
+    // Modern wrapper for icon consistency in modal (optional, simple wrapper here)
+    const inputWrapper = document.createElement("div");
+    inputWrapper.className = "select-wrapper"; // Reusing class for uniformity
+    inputWrapper.appendChild(input);
+    
+    wrap.appendChild(inputWrapper);
     modalBody.appendChild(wrap);
   });
 
@@ -244,6 +256,8 @@ function closeModal() {
   if (typeof modal.close === "function") modal.close();
   else modal.removeAttribute("open");
 }
+// Expose for HTML onclick
+window.closeModal = closeModal; 
 
 modalCancel.addEventListener("click", () => {
   if (modalResolver) modalResolver(null);
@@ -286,7 +300,6 @@ async function getProfileOrThrow() {
     .eq("id", uid)
     .single();
 
-  // If row doesn't exist (should exist due to trigger), create it as teacher.
   if (error && error.code === "PGRST116") {
     const { error: insErr } = await sb.from("profiles").insert({
       id: uid,
@@ -416,7 +429,7 @@ async function deleteEntry(id) {
   if (error) throw error;
 }
 
-/* ========= EXPORT CSV (Admin + Teacher) ========= */
+/* ========= EXPORT CSV ========= */
 function csvEscape(v) {
   if (v === null || v === undefined) return "";
   const s = String(v);
@@ -487,7 +500,6 @@ async function exportAllDataCSVs() {
     const typeMap = new Map(types.map(t => [t.id, t.name]));
     const studentMap = new Map(students.map(s => [s.id, s]));
 
-    // classes.csv
     const classRows = classes.map(c => ({
       id: c.id,
       grade_level_id: c.grade_level_id,
@@ -501,7 +513,6 @@ async function exportAllDataCSVs() {
       classRows
     );
 
-    // students.csv
     const studentRows = students.map(s => {
       const cls = classMap.get(s.class_id);
       const gradeId = cls?.grade_level_id ?? "";
@@ -522,7 +533,6 @@ async function exportAllDataCSVs() {
       studentRows
     );
 
-    // types.csv
     const typeRows = types.map(t => ({
       id: t.id,
       name: t.name,
@@ -534,7 +544,6 @@ async function exportAllDataCSVs() {
       typeRows
     );
 
-    // entries.csv (flatten)
     const entryRows = entries.map(e => {
       const s = studentMap.get(e.student_id);
       const cls = s ? classMap.get(s.class_id) : null;
@@ -637,7 +646,7 @@ async function exportStudentEntriesCSV(studentId) {
   }
 }
 
-/* ========= RENDERERS ========= */
+/* ========= RENDERERS (Updated with Icons) ========= */
 function populateGradeSelect(selectEl, selectedId) {
   selectEl.innerHTML = "";
   state.gradeLevels.forEach((g) => {
@@ -677,11 +686,11 @@ function renderClassesTable() {
     const tr = document.createElement("tr");
     tr.innerHTML = `
       <td>${escapeHtml(c.name)}</td>
-      <td>${escapeHtml(gradeName(c.grade_level_id))}</td>
+      <td><span class="badge neutral">${escapeHtml(gradeName(c.grade_level_id))}</span></td>
       <td class="right">
         <div class="actions">
-          <button class="btn secondary" data-action="edit" data-id="${c.id}">Edit</button>
-          <button class="btn danger" data-action="del" data-id="${c.id}">Delete</button>
+          <button class="btn-icon" title="Edit" data-action="edit" data-id="${c.id}"><i class="ph ph-pencil-simple"></i></button>
+          <button class="btn-icon" title="Delete" style="color:var(--danger)" data-action="del" data-id="${c.id}"><i class="ph ph-trash"></i></button>
         </div>
       </td>
     `;
@@ -694,7 +703,7 @@ function populateAdminClassSelect() {
   if (!state.adminClasses.length) {
     const opt = document.createElement("option");
     opt.value = "";
-    opt.textContent = "No classes";
+    opt.textContent = "No classes available";
     adminClassSelect.appendChild(opt);
     adminClassSelect.disabled = true;
     state.adminSelectedClassId = null;
@@ -720,11 +729,11 @@ function populateAdminClassSelect() {
 function renderStudentsTable() {
   tblStudentsBody.innerHTML = "";
   if (!state.adminSelectedClassId) {
-    tblStudentsBody.innerHTML = `<tr><td colspan="3" class="muted">Select a class.</td></tr>`;
+    tblStudentsBody.innerHTML = `<tr><td colspan="3" class="muted">Select a class to view students.</td></tr>`;
     return;
   }
   if (!state.adminStudents.length) {
-    tblStudentsBody.innerHTML = `<tr><td colspan="3" class="muted">No students found.</td></tr>`;
+    tblStudentsBody.innerHTML = `<tr><td colspan="3" class="muted">No students found in this class.</td></tr>`;
     return;
   }
 
@@ -735,8 +744,8 @@ function renderStudentsTable() {
       <td>${escapeHtml(s.student_no || "-")}</td>
       <td class="right">
         <div class="actions">
-          <button class="btn secondary" data-action="edit" data-id="${s.id}">Edit</button>
-          <button class="btn danger" data-action="del" data-id="${s.id}">Delete</button>
+          <button class="btn-icon" title="Edit" data-action="edit" data-id="${s.id}"><i class="ph ph-pencil-simple"></i></button>
+          <button class="btn-icon" title="Delete" style="color:var(--danger)" data-action="del" data-id="${s.id}"><i class="ph ph-trash"></i></button>
         </div>
       </td>
     `;
@@ -757,8 +766,8 @@ function renderTypesTable() {
       <td>${escapeHtml(t.name)}</td>
       <td class="right">
         <div class="actions">
-          <button class="btn secondary" data-action="edit" data-id="${t.id}">Edit</button>
-          <button class="btn danger" data-action="del" data-id="${t.id}">Delete</button>
+          <button class="btn-icon" title="Edit" data-action="edit" data-id="${t.id}"><i class="ph ph-pencil-simple"></i></button>
+          <button class="btn-icon" title="Delete" style="color:var(--danger)" data-action="del" data-id="${t.id}"><i class="ph ph-trash"></i></button>
         </div>
       </td>
     `;
@@ -811,10 +820,12 @@ function renderTeacherStudents() {
   rows.forEach((s) => {
     const tr = document.createElement("tr");
     tr.innerHTML = `
-      <td>${escapeHtml(s.full_name)}</td>
+      <td><span style="font-weight:600">${escapeHtml(s.full_name)}</span></td>
       <td>${escapeHtml(s.student_no || "-")}</td>
       <td class="right">
-        <button class="btn primary" data-action="open" data-id="${s.id}">Open</button>
+        <button class="btn sm primary" data-action="open" data-id="${s.id}">
+          Open Profile <i class="ph ph-caret-right"></i>
+        </button>
       </td>
     `;
     tblTeacherStudentsBody.appendChild(tr);
@@ -829,25 +840,31 @@ function renderEntriesTable() {
   }
 
   if (!state.studentEntries.length) {
-    tblEntriesBody.innerHTML = `<tr><td colspan="5" class="muted">No entries yet.</td></tr>`;
+    tblEntriesBody.innerHTML = `<tr><td colspan="5" class="muted">No entries recorded yet.</td></tr>`;
     return;
   }
 
   state.studentEntries.forEach((e) => {
     const canManage = (state.role === "admin") || (e.created_by === state.user.id);
     const typeName = e.cocurricular_types?.name || "(Unknown)";
-    const createdTag = e.created_by === state.user.id ? `<span class="badge ok">mine</span>` : `<span class="badge">teacher</span>`;
+    const createdTag = e.created_by === state.user.id 
+      ? `<span class="badge ok">Mine</span>` 
+      : `<span class="badge neutral">Teacher</span>`;
 
     const tr = document.createElement("tr");
     tr.innerHTML = `
       <td>${escapeHtml(e.activity_date)}</td>
-      <td>${escapeHtml(typeName)}</td>
-      <td>${escapeHtml(e.subject)}</td>
+      <td><span class="badge neutral">${escapeHtml(typeName)}</span></td>
+      <td style="font-weight:500">${escapeHtml(e.subject)}</td>
       <td>${createdTag}</td>
       <td class="right">
         <div class="actions">
-          <button class="btn secondary" data-action="edit" data-id="${e.id}" ${canManage ? "" : "disabled"}>Edit</button>
-          <button class="btn danger" data-action="del" data-id="${e.id}" ${canManage ? "" : "disabled"}>Delete</button>
+          <button class="btn-icon" title="Edit" data-action="edit" data-id="${e.id}" ${canManage ? "" : "disabled"} style="${canManage?'':'opacity:0.3'}">
+            <i class="ph ph-pencil-simple"></i>
+          </button>
+          <button class="btn-icon" title="Delete" data-action="del" data-id="${e.id}" ${canManage ? "" : "disabled"} style="${canManage?'color:var(--danger)':'opacity:0.3'}">
+            <i class="ph ph-trash"></i>
+          </button>
         </div>
       </td>
     `;
@@ -901,7 +918,7 @@ async function openStudent(studentId) {
   studentTitle.textContent = state.selectedStudent.full_name;
   const gradeLabel = gradeName(state.teacherSelectedGrade);
   const classLabel = state.teacherClasses.find(c => c.id === state.teacherSelectedClassId)?.name || "";
-  studentSub.textContent = `${gradeLabel}${classLabel ? " • " + classLabel : ""}`;
+  studentSub.textContent = `${gradeLabel} • ${classLabel}`;
 
   populateTypeSelect(entryType);
   entrySubject.value = "";
@@ -954,7 +971,7 @@ async function refreshAllAdmin() {
   try {
     await loadBootstrapData();
     await loadAdminClassesAndStudents();
-    toast("Ready", "Admin console loaded.", "ok");
+    toast("System Ready", "Admin console loaded successfully.", "ok");
   } catch (e) {
     toast("Error", e.message || "Failed to load admin data.", "err");
   } finally {
@@ -967,7 +984,7 @@ async function refreshAllTeacher() {
   try {
     await loadBootstrapData();
     await loadTeacherClassesAndStudents();
-    toast("Ready", "Teacher view loaded.", "ok");
+    toast("System Ready", "Teacher dashboard loaded successfully.", "ok");
   } catch (e) {
     toast("Error", e.message || "Failed to load teacher data.", "err");
   } finally {
@@ -990,7 +1007,7 @@ logoutBtn.addEventListener("click", async () => {
   setLoading(true);
   try {
     await sb.auth.signOut();
-    toast("Signed out", "You have been logged out.", "ok");
+    toast("Signed Out", "You have been logged out safely.", "ok");
   } catch (e) {
     toast("Error", e.message || "Logout failed.", "err");
   } finally {
@@ -1035,10 +1052,10 @@ loginForm.addEventListener("submit", async (e) => {
     state.profile = await getProfileOrThrow();
     state.role = state.profile.role;
 
-    toast("Welcome", `Signed in as ${state.role}.`, "ok");
+    toast("Welcome Back", `Signed in as ${state.role}.`, "ok");
     await routeAfterLogin();
   } catch (err) {
-    toast("Login failed", err.message || "Invalid credentials.", "err");
+    toast("Login Failed", err.message || "Invalid credentials.", "err");
   } finally {
     setLoading(false);
   }
@@ -1061,7 +1078,7 @@ signupForm.addEventListener("submit", async (e) => {
     });
     if (error) throw error;
 
-    toast("Signed up", "Teacher account created. You may need to confirm email (depending on Auth settings).", "ok", 4200);
+    toast("Account Created", "You may need to confirm your email before logging in.", "ok", 4200);
     signupPanel.classList.add("hidden");
 
     const s = data.session;
@@ -1073,7 +1090,7 @@ signupForm.addEventListener("submit", async (e) => {
       await routeAfterLogin();
     }
   } catch (err) {
-    toast("Sign up failed", err.message || "Could not create user.", "err");
+    toast("Sign Up Failed", err.message || "Could not create user.", "err");
   } finally {
     setLoading(false);
   }
@@ -1113,12 +1130,12 @@ btnClassCreate.addEventListener("click", async () => {
   if (state.role !== "admin") return;
 
   const values = await openModal({
-    title: "Create Class",
-    submitText: "Create",
+    title: "Create New Class",
+    submitText: "Create Class",
     fields: [
       {
         name: "grade_level_id",
-        label: "Grade",
+        label: "Grade Level",
         type: "select",
         required: true,
         options: state.gradeLevels.map(g => ({ value: String(g.id), label: g.name })),
@@ -1136,7 +1153,7 @@ btnClassCreate.addEventListener("click", async () => {
       grade_level_id: Number(values.grade_level_id),
       name: values.name.trim(),
     });
-    toast("Success", "Class created.", "ok");
+    toast("Success", "Class created successfully.", "ok");
     state.adminSelectedGrade = Number(values.grade_level_id);
     adminGradeSelect.value = String(state.adminSelectedGrade);
     await loadAdminClassesAndStudents();
@@ -1160,7 +1177,7 @@ tblClassesBody.addEventListener("click", async (e) => {
   if (action === "edit") {
     const values = await openModal({
       title: "Edit Class",
-      submitText: "Save",
+      submitText: "Update Class",
       fields: [
         {
           name: "grade_level_id",
@@ -1198,7 +1215,7 @@ tblClassesBody.addEventListener("click", async (e) => {
     setLoading(true);
     try {
       await deleteClass(id);
-      toast("Deleted", "Class deleted.", "ok");
+      toast("Deleted", "Class removed.", "ok");
       await loadAdminClassesAndStudents();
     } catch (err) {
       toast("Error", err.message || "Delete blocked (RLS?)", "err");
@@ -1213,13 +1230,13 @@ btnStudentCreate.addEventListener("click", async () => {
   if (state.role !== "admin") return;
 
   if (!state.adminSelectedClassId) {
-    toast("Select class", "Please select a class first.", "warn");
+    toast("Select Class", "Please select a class first.", "warn");
     return;
   }
 
   const values = await openModal({
-    title: "Create Student",
-    submitText: "Create",
+    title: "Register New Student",
+    submitText: "Register Student",
     fields: [
       {
         name: "class_id",
@@ -1243,7 +1260,7 @@ btnStudentCreate.addEventListener("click", async () => {
       full_name: values.full_name.trim(),
       student_no: values.student_no ? values.student_no.trim() : null
     });
-    toast("Success", "Student created.", "ok");
+    toast("Success", "Student registered.", "ok");
     state.adminSelectedClassId = values.class_id;
     adminClassSelect.value = values.class_id;
 
@@ -1269,7 +1286,7 @@ tblStudentsBody.addEventListener("click", async (e) => {
   if (action === "edit") {
     const values = await openModal({
       title: "Edit Student",
-      submitText: "Save",
+      submitText: "Update Student",
       fields: [
         {
           name: "class_id",
@@ -1328,10 +1345,10 @@ btnTypeCreate.addEventListener("click", async () => {
   if (state.role !== "admin") return;
 
   const values = await openModal({
-    title: "Create Co-curricular Type",
-    submitText: "Create",
+    title: "Add Co-curricular Type",
+    submitText: "Add Type",
     fields: [
-      { name: "name", label: "Type Name", type: "text", required: true, minLength: 1, placeholder: "e.g., Sports" }
+      { name: "name", label: "Type Name", type: "text", required: true, minLength: 1, placeholder: "e.g., Sports, Clubs" }
     ],
     initial: { name: "" }
   });
@@ -1340,7 +1357,7 @@ btnTypeCreate.addEventListener("click", async () => {
   setLoading(true);
   try {
     await createType({ name: values.name.trim() });
-    toast("Success", "Type created.", "ok");
+    toast("Success", "Type added.", "ok");
     state.types = await fetchTypes();
     renderTypesTable();
     populateTypeSelect(entryType);
@@ -1364,7 +1381,7 @@ tblTypesBody.addEventListener("click", async (e) => {
   if (action === "edit") {
     const values = await openModal({
       title: "Edit Type",
-      submitText: "Save",
+      submitText: "Update Type",
       fields: [
         { name: "name", label: "Type Name", type: "text", required: true, minLength: 1 }
       ],
@@ -1524,7 +1541,7 @@ tblEntriesBody.addEventListener("click", async (e) => {
   if (action === "edit") {
     const values = await openModal({
       title: "Edit Entry",
-      submitText: "Save",
+      submitText: "Update Entry",
       fields: [
         { name: "subject", label: "Subject", type: "text", required: true, minLength: 3 },
         { name: "activity_date", label: "Activity Date", type: "date", required: true },
@@ -1631,4 +1648,3 @@ async function init() {
 }
 
 init();
-
