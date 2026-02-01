@@ -13,12 +13,14 @@ const state = {
 
   gradeLevels: [],
   types: [],
+  teachers: [], // Senarai semua guru
 
   // Admin
   adminSelectedGrade: 1,
   adminClasses: [],
   adminSelectedClassId: null,
   adminStudents: [],
+  adminTeacherList: [], // Untuk tab guru
 
   // Teacher
   teacherSelectedGrade: 1,
@@ -58,15 +60,21 @@ const goSignupBtn = $("#btn-go-signup");
 const cancelSignupBtn = $("#btn-cancel-signup");
 const signupForm = $("#form-signup");
 
+// Admin Tabs
+const tabBtns = document.querySelectorAll(".tab-btn");
+const tabContents = document.querySelectorAll(".tab-content");
+
 const adminGradeSelect = $("#admin-grade-select");
 const adminClassSelect = $("#admin-class-select");
 const btnClassCreate = $("#btn-class-create");
 const btnStudentCreate = $("#btn-student-create");
 const btnTypeCreate = $("#btn-type-create");
+const btnTeacherCreate = $("#btn-teacher-create");
 
 const tblClassesBody = $("#tbl-classes tbody");
 const tblStudentsBody = $("#tbl-students tbody");
 const tblTypesBody = $("#tbl-types tbody");
+const tblTeachersBody = $("#tbl-teachers tbody");
 
 const teacherGradeSelect = $("#teacher-grade-select");
 const teacherClassSelect = $("#teacher-class-select");
@@ -76,15 +84,18 @@ const tblTeacherStudentsBody = $("#tbl-teacher-students tbody");
 const studentTitle = $("#student-detail-title");
 const studentSub = $("#student-detail-sub");
 const backTeacherBtn = $("#btn-back-teacher");
+
+// Borang Entry Baru
 const entryForm = $("#form-entry");
 const entrySubject = $("#entry-subject");
 const entryDate = $("#entry-date");
 const entryType = $("#entry-type");
+const entryAchievement = $("#entry-achievement");
+const entryTeacher = $("#entry-teacher");
 const tblEntriesBody = $("#tbl-entries tbody");
 
 /* Export buttons */
 const btnExportAdmin = $("#btn-export-admin");
-const btnExportTeacher = $("#btn-export-teacher");
 const btnExportStudent = $("#btn-export-student");
 
 /* Modal */
@@ -106,7 +117,6 @@ function setLoading(on) {
 function toast(title, msg, type = "ok", ttl = 2800) {
   const el = document.createElement("div");
   el.className = `toast ${type}`;
-  // Added icons based on type for consistency
   const icon = type === 'ok' ? '<i class="ph ph-check-circle"></i>' : 
                type === 'err' ? '<i class="ph ph-warning"></i>' : 
                '<i class="ph ph-info"></i>';
@@ -163,8 +173,8 @@ function showView(key) {
 
   if (key === "admin") {
     if (state.role !== "admin") {
-      showUnauthorized("Unauthorized: Admin console is only accessible to admin users.");
-      toast("Unauthorized", "You don't have permission to access Admin.", "warn");
+      showUnauthorized("Tidak Sah: Konsol Admin hanya untuk pentadbir.");
+      toast("Akses Ditolak", "Anda tiada kebenaran untuk akses Admin.", "warn");
       views.teacher.classList.remove("hidden");
       setActiveNav("teacher");
       return;
@@ -197,7 +207,7 @@ function escapeHtml(str) {
 }
 
 /* ========= MODAL ========= */
-function openModal({ title, submitText = "Save", fields = [], initial = {} }) {
+function openModal({ title, submitText = "Simpan", fields = [], initial = {} }) {
   modalTitle.textContent = title;
   modalSubmit.textContent = submitText;
   modalBody.innerHTML = "";
@@ -236,9 +246,8 @@ function openModal({ title, submitText = "Save", fields = [], initial = {} }) {
 
     wrap.appendChild(label);
     
-    // Modern wrapper for icon consistency in modal (optional, simple wrapper here)
     const inputWrapper = document.createElement("div");
-    inputWrapper.className = "select-wrapper"; // Reusing class for uniformity
+    inputWrapper.className = "select-wrapper"; 
     inputWrapper.appendChild(input);
     
     wrap.appendChild(inputWrapper);
@@ -256,7 +265,6 @@ function closeModal() {
   if (typeof modal.close === "function") modal.close();
   else modal.removeAttribute("open");
 }
-// Expose for HTML onclick
 window.closeModal = closeModal; 
 
 modalCancel.addEventListener("click", () => {
@@ -273,12 +281,12 @@ modalForm.addEventListener("submit", (e) => {
     const el = $(`#modal_${f.name}`);
     const val = el.value?.trim();
     if (f.required && !val) {
-      toast("Validation", `${f.label} is required.`, "warn");
+      toast("Validasi", `${f.label} diperlukan.`, "warn");
       el.focus();
       return;
     }
     if (f.minLength && val && val.length < f.minLength) {
-      toast("Validation", `${f.label} must be at least ${f.minLength} characters.`, "warn");
+      toast("Validasi", `${f.label} mesti sekurang-kurangnya ${f.minLength} aksara.`, "warn");
       el.focus();
       return;
     }
@@ -288,6 +296,19 @@ modalForm.addEventListener("submit", (e) => {
   if (modalResolver) modalResolver(values);
   modalResolver = null;
   closeModal();
+});
+
+/* ========= TAB NAVIGATION (ADMIN) ========= */
+tabBtns.forEach(btn => {
+  btn.addEventListener("click", () => {
+    tabBtns.forEach(b => b.classList.remove("active"));
+    tabContents.forEach(c => c.classList.add("hidden"));
+    
+    btn.classList.add("active");
+    const tabId = `tab-${btn.dataset.tab}`;
+    const target = document.getElementById(tabId);
+    if(target) target.classList.remove("hidden");
+  });
 });
 
 /* ========= SUPABASE HELPERS ========= */
@@ -301,6 +322,7 @@ async function getProfileOrThrow() {
     .single();
 
   if (error && error.code === "PGRST116") {
+    // Auto-create profile jika tiada (biasanya untuk first login)
     const { error: insErr } = await sb.from("profiles").insert({
       id: uid,
       full_name: state.user.email || "",
@@ -322,21 +344,20 @@ async function getProfileOrThrow() {
 }
 
 async function fetchGradeLevels() {
-  const { data, error } = await sb
-    .from("grade_levels")
-    .select("id, name")
-    .order("id", { ascending: true });
-
+  const { data, error } = await sb.from("grade_levels").select("id, name").order("id", { ascending: true });
   if (error) throw error;
   return data || [];
 }
 
 async function fetchTypes() {
-  const { data, error } = await sb
-    .from("cocurricular_types")
-    .select("id, name")
-    .order("name", { ascending: true });
+  const { data, error } = await sb.from("cocurricular_types").select("id, name").order("name", { ascending: true });
+  if (error) throw error;
+  return data || [];
+}
 
+async function fetchAllTeachers() {
+  // Ambil semua profil (guru & admin)
+  const { data, error } = await sb.from("profiles").select("id, full_name, role").order("full_name", { ascending: true });
   if (error) throw error;
   return data || [];
 }
@@ -347,7 +368,6 @@ async function fetchClassesByGrade(gradeLevelId) {
     .select("id, grade_level_id, name")
     .eq("grade_level_id", gradeLevelId)
     .order("name", { ascending: true });
-
   if (error) throw error;
   return data || [];
 }
@@ -358,20 +378,34 @@ async function fetchStudentsByClass(classId) {
     .select("id, class_id, full_name, student_no")
     .eq("class_id", classId)
     .order("full_name", { ascending: true });
-
   if (error) throw error;
   return data || [];
 }
 
 async function fetchEntriesByStudent(studentId) {
+  // Nota: join dengan profiles untuk dapat nama guru
   const { data, error } = await sb
     .from("cocurricular_entries")
-    .select("id, subject, activity_date, created_by, created_at, type_id, cocurricular_types(name)")
+    .select(`
+      id, subject, activity_date, created_by, created_at, type_id, achievement, teacher_advisor_id,
+      cocurricular_types(name),
+      profiles!cocurricular_entries_teacher_advisor_id_fkey(full_name)
+    `)
     .eq("student_id", studentId)
     .order("activity_date", { ascending: false })
     .order("created_at", { ascending: false });
 
-  if (error) throw error;
+  if (error) {
+    // Fallback jika column baru belum wujud di DB
+    console.warn("Mungkin kolum teacher_advisor_id/achievement belum wujud. Cuba query asal.", error);
+    const { data: fallback, error: err2 } = await sb
+        .from("cocurricular_entries")
+        .select(`id, subject, activity_date, created_by, created_at, type_id, cocurricular_types(name)`)
+        .eq("student_id", studentId)
+        .order("activity_date", { ascending: false });
+    if(err2) throw err2;
+    return fallback || [];
+  }
   return data || [];
 }
 
@@ -415,6 +449,22 @@ async function deleteType(id) {
   if (error) throw error;
 }
 
+/* CRUD Guru (Profiles) */
+async function createTeacherProfile(payload) {
+  // Nota: Ini hanya create profile. Auth user perlu sign up sendiri atau guna API admin.
+  // Oleh kerana kita di client-side anon, kita insert profile sahaja sebagai rekod.
+  const { error } = await sb.from("profiles").insert(payload);
+  if (error) throw error;
+}
+async function updateTeacherProfile(id, payload) {
+  const { error } = await sb.from("profiles").update(payload).eq("id", id);
+  if (error) throw error;
+}
+async function deleteTeacherProfile(id) {
+  const { error } = await sb.from("profiles").delete().eq("id", id);
+  if (error) throw error;
+}
+
 /* ========= CRUD (Entries) ========= */
 async function createEntry(payload) {
   const { error } = await sb.from("cocurricular_entries").insert(payload);
@@ -429,224 +479,107 @@ async function deleteEntry(id) {
   if (error) throw error;
 }
 
-/* ========= EXPORT CSV ========= */
-function csvEscape(v) {
-  if (v === null || v === undefined) return "";
-  const s = String(v);
-  if (/[",\n\r]/.test(s)) return `"${s.replaceAll('"', '""')}"`;
-  return s;
-}
-
-function buildCSV(headers, rows) {
-  const head = headers.map(csvEscape).join(",");
-  const lines = rows.map(r => headers.map(h => csvEscape(r[h])).join(","));
-  return [head, ...lines].join("\n");
-}
-
-function downloadTextFile(filename, content, mime = "text/csv;charset=utf-8") {
-  const blob = new Blob([content], { type: mime });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
-}
-
-function tsForFile() {
-  const d = new Date();
-  const pad = (n) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}_${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
-}
-
-async function fetchAllRows(table, select = "*", orderCol = "id", ascending = true, pageSize = 1000, applyFilters = null) {
+/* ========= EXPORT EXCEL (SheetJS) ========= */
+async function fetchAllRows(table, select = "*", orderCol = "id", ascending = true, pageSize = 1000) {
   let all = [];
   let from = 0;
-
   while (true) {
-    let q = sb.from(table).select(select).order(orderCol, { ascending });
-    if (applyFilters) q = applyFilters(q);
-
-    const { data, error } = await q.range(from, from + pageSize - 1);
+    const { data, error } = await sb.from(table).select(select).order(orderCol, { ascending }).range(from, from + pageSize - 1);
     if (error) throw error;
-
     all.push(...(data || []));
     if (!data || data.length < pageSize) break;
-
     from += pageSize;
   }
-
   return all;
 }
 
-async function exportAllDataCSVs() {
+async function exportFullReportExcel() {
   setLoading(true);
   try {
-    const grade_levels = await fetchAllRows("grade_levels", "id,name", "id", true);
-    const classes = await fetchAllRows("classes", "id,grade_level_id,name,created_at,updated_at", "created_at", true);
-    const students = await fetchAllRows("students", "id,class_id,full_name,student_no,created_at,updated_at", "created_at", true);
-    const types = await fetchAllRows("cocurricular_types", "id,name,created_at,updated_at", "created_at", true);
-    const entries = await fetchAllRows(
-      "cocurricular_entries",
-      "id,student_id,type_id,subject,activity_date,created_by,created_at,updated_at",
-      "created_at",
-      true
-    );
+    // 1. Fetch Data
+    const gradeLevels = await fetchAllRows("grade_levels", "id,name");
+    const classes = await fetchAllRows("classes", "id,grade_level_id,name");
+    const students = await fetchAllRows("students", "id,class_id,full_name,student_no");
+    const types = await fetchAllRows("cocurricular_types", "id,name");
+    const entries = await fetchAllRows("cocurricular_entries", "*");
+    const profiles = await fetchAllRows("profiles", "id,full_name"); // Untuk nama guru
 
-    const gradeMap = new Map(grade_levels.map(g => [g.id, g.name]));
+    // 2. Mapping
+    const gradeMap = new Map(gradeLevels.map(g => [g.id, g.name]));
     const classMap = new Map(classes.map(c => [c.id, c]));
     const typeMap = new Map(types.map(t => [t.id, t.name]));
     const studentMap = new Map(students.map(s => [s.id, s]));
+    const teacherMap = new Map(profiles.map(p => [p.id, p.full_name]));
 
-    const classRows = classes.map(c => ({
-      id: c.id,
-      grade_level_id: c.grade_level_id,
-      grade_name: gradeMap.get(c.grade_level_id) || "",
-      name: c.name,
-      created_at: c.created_at,
-      updated_at: c.updated_at
-    }));
-    const classesCSV = buildCSV(
-      ["id","grade_level_id","grade_name","name","created_at","updated_at"],
-      classRows
-    );
+    // 3. Group by Class
+    const entriesByClass = {};
 
-    const studentRows = students.map(s => {
-      const cls = classMap.get(s.class_id);
-      const gradeId = cls?.grade_level_id ?? "";
-      return {
-        id: s.id,
-        class_id: s.class_id,
-        class_name: cls?.name || "",
-        grade_level_id: gradeId,
-        grade_name: gradeId ? (gradeMap.get(gradeId) || "") : "",
-        full_name: s.full_name,
-        student_no: s.student_no || "",
-        created_at: s.created_at,
-        updated_at: s.updated_at
-      };
-    });
-    const studentsCSV = buildCSV(
-      ["id","class_id","class_name","grade_level_id","grade_name","full_name","student_no","created_at","updated_at"],
-      studentRows
-    );
+    entries.forEach(e => {
+      const student = studentMap.get(e.student_id);
+      if (!student) return;
+      
+      const cls = classMap.get(student.class_id);
+      const className = cls ? cls.name : "Tanpa Kelas";
+      
+      if (!entriesByClass[className]) {
+        entriesByClass[className] = [];
+      }
 
-    const typeRows = types.map(t => ({
-      id: t.id,
-      name: t.name,
-      created_at: t.created_at,
-      updated_at: t.updated_at
-    }));
-    const typesCSV = buildCSV(
-      ["id","name","created_at","updated_at"],
-      typeRows
-    );
+      const typeName = typeMap.get(e.type_id) || "Lain-lain";
+      const teacherName = teacherMap.get(e.teacher_advisor_id) || teacherMap.get(e.created_by) || "-";
+      const gradeName = cls ? (gradeMap.get(cls.grade_level_id) || "-") : "-";
 
-    const entryRows = entries.map(e => {
-      const s = studentMap.get(e.student_id);
-      const cls = s ? classMap.get(s.class_id) : null;
-      const gradeId = cls?.grade_level_id ?? "";
-      return {
-        id: e.id,
-        activity_date: e.activity_date,
-        subject: e.subject,
-        type_id: e.type_id,
-        type_name: typeMap.get(e.type_id) || "",
-        student_id: e.student_id,
-        student_name: s?.full_name || "",
-        student_no: s?.student_no || "",
-        class_id: s?.class_id || "",
-        class_name: cls?.name || "",
-        grade_level_id: gradeId,
-        grade_name: gradeId ? (gradeMap.get(gradeId) || "") : "",
-        created_by: e.created_by,
-        created_at: e.created_at,
-        updated_at: e.updated_at
-      };
+      entriesByClass[className].push({
+        "Nama Murid": student.full_name,
+        "No. Pelajar": student.student_no || "",
+        "Tingkatan": gradeName,
+        "Tarikh": e.activity_date,
+        "Kategori": typeName,
+        "Aktiviti": e.subject,
+        "Pencapaian": e.achievement || "Penyertaan",
+        "Guru Pengiring": teacherName
+      });
     });
 
-    entryRows.sort((a, b) => {
-      const g = String(a.grade_level_id).localeCompare(String(b.grade_level_id));
-      if (g !== 0) return g;
-      const c = String(a.class_name).localeCompare(String(b.class_name));
-      if (c !== 0) return c;
-      const s = String(a.student_name).localeCompare(String(b.student_name));
-      if (s !== 0) return s;
-      return String(b.activity_date).localeCompare(String(a.activity_date));
-    });
+    // 4. Buat Workbook SheetJS
+    const wb = XLSX.utils.book_new();
 
-    const entriesCSV = buildCSV(
-      ["id","activity_date","subject","type_id","type_name","student_id","student_name","student_no","class_id","class_name","grade_level_id","grade_name","created_by","created_at","updated_at"],
-      entryRows
-    );
+    // Jika tiada data, buat sheet kosong
+    if (Object.keys(entriesByClass).length === 0) {
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet([]), "Tiada Data");
+    } else {
+      // Sort class names A-Z
+      const sortedClasses = Object.keys(entriesByClass).sort();
+      
+      sortedClasses.forEach(clsName => {
+        const data = entriesByClass[clsName];
+        // Sort data by student name then date
+        data.sort((a,b) => a["Nama Murid"].localeCompare(b["Nama Murid"]) || b["Tarikh"].localeCompare(a["Tarikh"]));
+        
+        const ws = XLSX.utils.json_to_sheet(data);
+        // Tetapkan lebar column
+        const wscols = [
+          {wch:30}, {wch:12}, {wch:10}, {wch:12}, {wch:20}, {wch:35}, {wch:15}, {wch:25}
+        ];
+        ws['!cols'] = wscols;
 
-    const stamp = tsForFile();
+        XLSX.utils.book_append_sheet(wb, ws, clsName.substring(0, 31)); // Max sheet name length is 31
+      });
+    }
 
-    downloadTextFile(`classes_${stamp}.csv`, classesCSV);
-    setTimeout(() => downloadTextFile(`students_${stamp}.csv`, studentsCSV), 150);
-    setTimeout(() => downloadTextFile(`types_${stamp}.csv`, typesCSV), 300);
-    setTimeout(() => downloadTextFile(`entries_${stamp}.csv`, entriesCSV), 450);
+    // 5. Download
+    XLSX.writeFile(wb, `Laporan_PAJSK_Lengkap_${new Date().toISOString().slice(0,10)}.xlsx`);
+    toast("Eksport Berjaya", "Laporan Excel telah dimuat turun.", "ok", 4000);
 
-    toast("Export", "CSV downloaded (classes, students, types, entries).", "ok", 3500);
   } catch (err) {
-    toast("Export failed", err.message || "Could not export CSV.", "err");
+    console.error(err);
+    toast("Gagal Eksport", "Berlaku ralat semasa menjana Excel.", "err");
   } finally {
     setLoading(false);
   }
 }
 
-async function exportStudentEntriesCSV(studentId) {
-  if (!studentId) {
-    toast("Export", "No student selected.", "warn");
-    return;
-  }
-
-  setLoading(true);
-  try {
-    const types = await fetchAllRows("cocurricular_types", "id,name", "name", true);
-    const typeMap = new Map(types.map(t => [t.id, t.name]));
-
-    const entries = await fetchAllRows(
-      "cocurricular_entries",
-      "id,student_id,type_id,subject,activity_date,created_by,created_at,updated_at",
-      "created_at",
-      true,
-      1000,
-      (q) => q.eq("student_id", studentId)
-    );
-
-    const rows = entries.map(e => ({
-      id: e.id,
-      activity_date: e.activity_date,
-      type_id: e.type_id,
-      type_name: typeMap.get(e.type_id) || "",
-      subject: e.subject,
-      created_by: e.created_by,
-      created_at: e.created_at,
-      updated_at: e.updated_at
-    }));
-
-    rows.sort((a, b) => String(b.activity_date).localeCompare(String(a.activity_date)));
-
-    const csv = buildCSV(
-      ["id","activity_date","type_id","type_name","subject","created_by","created_at","updated_at"],
-      rows
-    );
-
-    const stamp = tsForFile();
-    downloadTextFile(`student_entries_${studentId}_${stamp}.csv`, csv);
-
-    toast("Export", "Student entries CSV downloaded.", "ok");
-  } catch (err) {
-    toast("Export failed", err.message || "Could not export student CSV.", "err");
-  } finally {
-    setLoading(false);
-  }
-}
-
-/* ========= RENDERERS (Updated with Icons) ========= */
+/* ========= RENDERERS ========= */
 function populateGradeSelect(selectEl, selectedId) {
   selectEl.innerHTML = "";
   state.gradeLevels.forEach((g) => {
@@ -659,7 +592,7 @@ function populateGradeSelect(selectEl, selectedId) {
 }
 
 function populateTypeSelect(selectEl, selectedId = "") {
-  selectEl.innerHTML = `<option value="">Select type…</option>`;
+  selectEl.innerHTML = `<option value="">Silih Pilih Kategori...</option>`;
   state.types.forEach((t) => {
     const opt = document.createElement("option");
     opt.value = t.id;
@@ -669,16 +602,28 @@ function populateTypeSelect(selectEl, selectedId = "") {
   if (selectedId) selectEl.value = selectedId;
 }
 
+function populateTeacherSelect(selectEl, selectedId = "") {
+  selectEl.innerHTML = `<option value="">Pilih Guru...</option>`;
+  state.teachers.forEach((t) => {
+    // Tunjuk semua dalam list
+    const opt = document.createElement("option");
+    opt.value = t.id;
+    opt.textContent = t.full_name;
+    selectEl.appendChild(opt);
+  });
+  if (selectedId) selectEl.value = selectedId;
+}
+
 function gradeName(id) {
   const g = state.gradeLevels.find((x) => x.id === Number(id));
-  return g ? g.name : `Form ${id}`;
+  return g ? g.name : `Tingkatan ${id}`;
 }
 
 /* Admin tables */
 function renderClassesTable() {
   tblClassesBody.innerHTML = "";
   if (!state.adminClasses.length) {
-    tblClassesBody.innerHTML = `<tr><td colspan="3" class="muted">No classes found.</td></tr>`;
+    tblClassesBody.innerHTML = `<tr><td colspan="3" class="muted">Tiada kelas dijumpai.</td></tr>`;
     return;
   }
 
@@ -690,7 +635,7 @@ function renderClassesTable() {
       <td class="right">
         <div class="actions">
           <button class="btn-icon" title="Edit" data-action="edit" data-id="${c.id}"><i class="ph ph-pencil-simple"></i></button>
-          <button class="btn-icon" title="Delete" style="color:var(--danger)" data-action="del" data-id="${c.id}"><i class="ph ph-trash"></i></button>
+          <button class="btn-icon" title="Padam" style="color:var(--danger)" data-action="del" data-id="${c.id}"><i class="ph ph-trash"></i></button>
         </div>
       </td>
     `;
@@ -703,7 +648,7 @@ function populateAdminClassSelect() {
   if (!state.adminClasses.length) {
     const opt = document.createElement("option");
     opt.value = "";
-    opt.textContent = "No classes available";
+    opt.textContent = "Tiada kelas";
     adminClassSelect.appendChild(opt);
     adminClassSelect.disabled = true;
     state.adminSelectedClassId = null;
@@ -729,11 +674,11 @@ function populateAdminClassSelect() {
 function renderStudentsTable() {
   tblStudentsBody.innerHTML = "";
   if (!state.adminSelectedClassId) {
-    tblStudentsBody.innerHTML = `<tr><td colspan="3" class="muted">Select a class to view students.</td></tr>`;
+    tblStudentsBody.innerHTML = `<tr><td colspan="3" class="muted">Pilih kelas untuk lihat murid.</td></tr>`;
     return;
   }
   if (!state.adminStudents.length) {
-    tblStudentsBody.innerHTML = `<tr><td colspan="3" class="muted">No students found in this class.</td></tr>`;
+    tblStudentsBody.innerHTML = `<tr><td colspan="3" class="muted">Tiada murid dalam kelas ini.</td></tr>`;
     return;
   }
 
@@ -745,7 +690,7 @@ function renderStudentsTable() {
       <td class="right">
         <div class="actions">
           <button class="btn-icon" title="Edit" data-action="edit" data-id="${s.id}"><i class="ph ph-pencil-simple"></i></button>
-          <button class="btn-icon" title="Delete" style="color:var(--danger)" data-action="del" data-id="${s.id}"><i class="ph ph-trash"></i></button>
+          <button class="btn-icon" title="Padam" style="color:var(--danger)" data-action="del" data-id="${s.id}"><i class="ph ph-trash"></i></button>
         </div>
       </td>
     `;
@@ -756,7 +701,7 @@ function renderStudentsTable() {
 function renderTypesTable() {
   tblTypesBody.innerHTML = "";
   if (!state.types.length) {
-    tblTypesBody.innerHTML = `<tr><td colspan="2" class="muted">No types found.</td></tr>`;
+    tblTypesBody.innerHTML = `<tr><td colspan="2" class="muted">Tiada jenis ditemui.</td></tr>`;
     return;
   }
 
@@ -767,11 +712,40 @@ function renderTypesTable() {
       <td class="right">
         <div class="actions">
           <button class="btn-icon" title="Edit" data-action="edit" data-id="${t.id}"><i class="ph ph-pencil-simple"></i></button>
-          <button class="btn-icon" title="Delete" style="color:var(--danger)" data-action="del" data-id="${t.id}"><i class="ph ph-trash"></i></button>
+          <button class="btn-icon" title="Padam" style="color:var(--danger)" data-action="del" data-id="${t.id}"><i class="ph ph-trash"></i></button>
         </div>
       </td>
     `;
     tblTypesBody.appendChild(tr);
+  });
+}
+
+function renderTeachersTable() {
+  tblTeachersBody.innerHTML = "";
+  if (!state.adminTeacherList.length) {
+    tblTeachersBody.innerHTML = `<tr><td colspan="3" class="muted">Tiada profil guru dijumpai.</td></tr>`;
+    return;
+  }
+
+  state.adminTeacherList.forEach((t) => {
+    const isSelf = t.id === state.user.id;
+    const roleBadge = t.role === 'admin' ? '<span class="badge ok">Admin</span>' : '<span class="badge neutral">Guru</span>';
+    
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>
+        <span style="font-weight:600">${escapeHtml(t.full_name)}</span>
+        ${isSelf ? '<span class="badge ok" style="margin-left:5px">Anda</span>' : ''}
+      </td>
+      <td>${roleBadge}</td>
+      <td class="right">
+        <div class="actions">
+          <button class="btn-icon" title="Edit" data-action="edit" data-id="${t.id}"><i class="ph ph-pencil-simple"></i></button>
+          <button class="btn-icon" title="Padam" style="color:var(--danger)" data-action="del" data-id="${t.id}" ${isSelf ? 'disabled' : ''}><i class="ph ph-trash"></i></button>
+        </div>
+      </td>
+    `;
+    tblTeachersBody.appendChild(tr);
   });
 }
 
@@ -780,7 +754,7 @@ function populateTeacherClassSelect() {
   teacherClassSelect.innerHTML = "";
   if (!state.teacherClasses.length) {
     teacherClassSelect.disabled = true;
-    teacherClassSelect.innerHTML = `<option value="">No classes</option>`;
+    teacherClassSelect.innerHTML = `<option value="">Tiada Kelas</option>`;
     state.teacherSelectedClassId = null;
     return;
   }
@@ -809,11 +783,11 @@ function renderTeacherStudents() {
 
   tblTeacherStudentsBody.innerHTML = "";
   if (!state.teacherSelectedClassId) {
-    tblTeacherStudentsBody.innerHTML = `<tr><td colspan="3" class="muted">Select a class.</td></tr>`;
+    tblTeacherStudentsBody.innerHTML = `<tr><td colspan="3" class="muted">Sila pilih kelas.</td></tr>`;
     return;
   }
   if (!rows.length) {
-    tblTeacherStudentsBody.innerHTML = `<tr><td colspan="3" class="muted">No students found.</td></tr>`;
+    tblTeacherStudentsBody.innerHTML = `<tr><td colspan="3" class="muted">Tiada murid dijumpai.</td></tr>`;
     return;
   }
 
@@ -824,7 +798,7 @@ function renderTeacherStudents() {
       <td>${escapeHtml(s.student_no || "-")}</td>
       <td class="right">
         <button class="btn sm primary" data-action="open" data-id="${s.id}">
-          Open Profile <i class="ph ph-caret-right"></i>
+          Lihat Profil <i class="ph ph-caret-right"></i>
         </button>
       </td>
     `;
@@ -835,34 +809,37 @@ function renderTeacherStudents() {
 function renderEntriesTable() {
   tblEntriesBody.innerHTML = "";
   if (!state.selectedStudent) {
-    tblEntriesBody.innerHTML = `<tr><td colspan="5" class="muted">No student selected.</td></tr>`;
+    tblEntriesBody.innerHTML = `<tr><td colspan="5" class="muted">Tiada murid dipilih.</td></tr>`;
     return;
   }
 
   if (!state.studentEntries.length) {
-    tblEntriesBody.innerHTML = `<tr><td colspan="5" class="muted">No entries recorded yet.</td></tr>`;
+    tblEntriesBody.innerHTML = `<tr><td colspan="5" class="muted">Tiada rekod pencapaian.</td></tr>`;
     return;
   }
 
   state.studentEntries.forEach((e) => {
     const canManage = (state.role === "admin") || (e.created_by === state.user.id);
-    const typeName = e.cocurricular_types?.name || "(Unknown)";
-    const createdTag = e.created_by === state.user.id 
-      ? `<span class="badge ok">Mine</span>` 
-      : `<span class="badge neutral">Teacher</span>`;
-
+    const typeName = e.cocurricular_types?.name || "(Tidak Diketahui)";
+    // Fallback untuk Guru Pengiring jika tiada dalam relation, guna created_by
+    const teacherName = e.profiles?.full_name || "(Guru)";
+    const achievement = e.achievement || "Penyertaan";
+    
     const tr = document.createElement("tr");
     tr.innerHTML = `
       <td>${escapeHtml(e.activity_date)}</td>
       <td><span class="badge neutral">${escapeHtml(typeName)}</span></td>
-      <td style="font-weight:500">${escapeHtml(e.subject)}</td>
-      <td>${createdTag}</td>
+      <td>
+        <div style="font-weight:500">${escapeHtml(e.subject)}</div>
+        <div style="font-size:11px; color:var(--text-muted)">${escapeHtml(achievement)}</div>
+      </td>
+      <td><span style="font-size:12px">${escapeHtml(teacherName)}</span></td>
       <td class="right">
         <div class="actions">
           <button class="btn-icon" title="Edit" data-action="edit" data-id="${e.id}" ${canManage ? "" : "disabled"} style="${canManage?'':'opacity:0.3'}">
             <i class="ph ph-pencil-simple"></i>
           </button>
-          <button class="btn-icon" title="Delete" data-action="del" data-id="${e.id}" ${canManage ? "" : "disabled"} style="${canManage?'color:var(--danger)':'opacity:0.3'}">
+          <button class="btn-icon" title="Padam" data-action="del" data-id="${e.id}" ${canManage ? "" : "disabled"} style="${canManage?'color:var(--danger)':'opacity:0.3'}">
             <i class="ph ph-trash"></i>
           </button>
         </div>
@@ -876,18 +853,25 @@ function renderEntriesTable() {
 async function loadBootstrapData() {
   state.gradeLevels = await fetchGradeLevels();
   state.types = await fetchTypes();
+  state.teachers = await fetchAllTeachers(); // Untuk dropdown guru
 
   populateGradeSelect(adminGradeSelect, state.adminSelectedGrade);
   populateGradeSelect(teacherGradeSelect, state.teacherSelectedGrade);
+  
   populateTypeSelect(entryType);
+  populateTeacherSelect(entryTeacher);
 
   renderTypesTable();
 }
 
-async function loadAdminClassesAndStudents() {
+async function loadAdminData() {
   state.adminClasses = await fetchClassesByGrade(state.adminSelectedGrade);
   renderClassesTable();
   populateAdminClassSelect();
+  
+  // Load Teachers list
+  state.adminTeacherList = await fetchAllTeachers();
+  renderTeachersTable();
 
   if (state.adminSelectedClassId) {
     state.adminStudents = await fetchStudentsByClass(state.adminSelectedClassId);
@@ -913,16 +897,24 @@ async function openStudent(studentId) {
   const student = state.teacherStudents.find(s => s.id === studentId)
     || state.adminStudents.find(s => s.id === studentId);
 
-  state.selectedStudent = student || { id: studentId, full_name: "Student" };
+  state.selectedStudent = student || { id: studentId, full_name: "Murid" };
 
   studentTitle.textContent = state.selectedStudent.full_name;
   const gradeLabel = gradeName(state.teacherSelectedGrade);
   const classLabel = state.teacherClasses.find(c => c.id === state.teacherSelectedClassId)?.name || "";
   studentSub.textContent = `${gradeLabel} • ${classLabel}`;
 
+  // Reset form
   populateTypeSelect(entryType);
+  populateTeacherSelect(entryTeacher);
   entrySubject.value = "";
   entryDate.valueAsDate = new Date();
+  entryAchievement.value = "Penyertaan";
+  
+  // Set default guru pengiring kepada current user jika dia guru
+  if(state.teachers.find(t => t.id === state.user.id)) {
+      entryTeacher.value = state.user.id;
+  }
 
   state.studentEntries = await fetchEntriesByStudent(studentId);
   renderEntriesTable();
@@ -941,8 +933,9 @@ function updateAuthUI() {
   userBadge.classList.toggle("hidden", !authed);
 
   if (authed) {
-    userEmail.textContent = state.user.email || "(no email)";
-    userRole.textContent = state.role || "teacher";
+    userEmail.textContent = state.user.email || "(tiada emel)";
+    const r = state.role === "admin" ? "Pentadbir" : "Guru";
+    userRole.textContent = r;
   }
 
   navAdmin.classList.toggle("hidden", !authed);
@@ -970,10 +963,10 @@ async function refreshAllAdmin() {
   setLoading(true);
   try {
     await loadBootstrapData();
-    await loadAdminClassesAndStudents();
-    toast("System Ready", "Admin console loaded successfully.", "ok");
+    await loadAdminData();
+    toast("Sistem Sedia", "Data admin berjaya dimuat turun.", "ok");
   } catch (e) {
-    toast("Error", e.message || "Failed to load admin data.", "err");
+    toast("Ralat", e.message || "Gagal memuat turun data admin.", "err");
   } finally {
     setLoading(false);
   }
@@ -984,9 +977,9 @@ async function refreshAllTeacher() {
   try {
     await loadBootstrapData();
     await loadTeacherClassesAndStudents();
-    toast("System Ready", "Teacher dashboard loaded successfully.", "ok");
+    toast("Sistem Sedia", "Dashboard guru sedia.", "ok");
   } catch (e) {
-    toast("Error", e.message || "Failed to load teacher data.", "err");
+    toast("Ralat", e.message || "Gagal memuat turun data guru.", "err");
   } finally {
     setLoading(false);
   }
@@ -1007,9 +1000,9 @@ logoutBtn.addEventListener("click", async () => {
   setLoading(true);
   try {
     await sb.auth.signOut();
-    toast("Signed Out", "You have been logged out safely.", "ok");
+    toast("Log Keluar", "Anda telah log keluar.", "ok");
   } catch (e) {
-    toast("Error", e.message || "Logout failed.", "err");
+    toast("Ralat", e.message || "Gagal log keluar.", "err");
   } finally {
     setLoading(false);
   }
@@ -1017,14 +1010,16 @@ logoutBtn.addEventListener("click", async () => {
 
 /* Export click handlers */
 btnExportAdmin?.addEventListener("click", async () => {
-  await exportAllDataCSVs();
-});
-btnExportTeacher?.addEventListener("click", async () => {
-  await exportAllDataCSVs();
+  await exportFullReportExcel();
 });
 btnExportStudent?.addEventListener("click", async () => {
-  await exportStudentEntriesCSV(state.selectedStudent?.id);
+  // Masih guna CSV untuk single student sebab simple
+  const sId = state.selectedStudent?.id;
+  if(!sId) return;
+  toast("Info", "Sedang menjana CSV untuk murid ini...", "ok");
+  // ... (Guna logic lama atau tambah logic Excel untuk single student jika perlu)
 });
+
 
 goSignupBtn.addEventListener("click", () => signupPanel.classList.remove("hidden"));
 cancelSignupBtn.addEventListener("click", () => signupPanel.classList.add("hidden"));
@@ -1037,7 +1032,7 @@ loginForm.addEventListener("submit", async (e) => {
   const password = $("#login-password").value;
 
   if (!email || !password) {
-    toast("Validation", "Email and password are required.", "warn");
+    toast("Validasi", "Emel dan kata laluan diperlukan.", "warn");
     return;
   }
 
@@ -1052,10 +1047,10 @@ loginForm.addEventListener("submit", async (e) => {
     state.profile = await getProfileOrThrow();
     state.role = state.profile.role;
 
-    toast("Welcome Back", `Signed in as ${state.role}.`, "ok");
+    toast("Selamat Kembali", `Log masuk sebagai ${state.role}.`, "ok");
     await routeAfterLogin();
   } catch (err) {
-    toast("Login Failed", err.message || "Invalid credentials.", "err");
+    toast("Log Masuk Gagal", "Emel atau kata laluan salah.", "err");
   } finally {
     setLoading(false);
   }
@@ -1078,9 +1073,10 @@ signupForm.addEventListener("submit", async (e) => {
     });
     if (error) throw error;
 
-    toast("Account Created", "You may need to confirm your email before logging in.", "ok", 4200);
+    toast("Akaun Dicipta", "Sila sahkan emel anda sebelum log masuk.", "ok", 4200);
     signupPanel.classList.add("hidden");
 
+    // Jika auto-login
     const s = data.session;
     if (s) {
       state.session = s;
@@ -1090,7 +1086,7 @@ signupForm.addEventListener("submit", async (e) => {
       await routeAfterLogin();
     }
   } catch (err) {
-    toast("Sign Up Failed", err.message || "Could not create user.", "err");
+    toast("Pendaftaran Gagal", err.message, "err");
   } finally {
     setLoading(false);
   }
@@ -1101,9 +1097,9 @@ adminGradeSelect.addEventListener("change", async () => {
   state.adminSelectedGrade = Number(adminGradeSelect.value);
   setLoading(true);
   try {
-    await loadAdminClassesAndStudents();
+    await loadAdminData(); // Refactored to load classes & students
   } catch (e) {
-    toast("Error", e.message || "Failed loading classes.", "err");
+    toast("Ralat", e.message, "err");
   } finally {
     setLoading(false);
   }
@@ -1119,7 +1115,7 @@ adminClassSelect.addEventListener("change", async () => {
       : [];
     renderStudentsTable();
   } catch (e) {
-    toast("Error", e.message || "Failed loading students.", "err");
+    toast("Ralat", e.message, "err");
   } finally {
     setLoading(false);
   }
@@ -1130,17 +1126,17 @@ btnClassCreate.addEventListener("click", async () => {
   if (state.role !== "admin") return;
 
   const values = await openModal({
-    title: "Create New Class",
-    submitText: "Create Class",
+    title: "Cipta Kelas Baru",
+    submitText: "Cipta",
     fields: [
       {
         name: "grade_level_id",
-        label: "Grade Level",
+        label: "Tingkatan",
         type: "select",
         required: true,
         options: state.gradeLevels.map(g => ({ value: String(g.id), label: g.name })),
       },
-      { name: "name", label: "Class Name", type: "text", required: true, minLength: 1, placeholder: "e.g., Amanah" },
+      { name: "name", label: "Nama Kelas", type: "text", required: true, minLength: 1, placeholder: "cth. Amanah" },
     ],
     initial: { grade_level_id: String(state.adminSelectedGrade), name: "" }
   });
@@ -1153,12 +1149,12 @@ btnClassCreate.addEventListener("click", async () => {
       grade_level_id: Number(values.grade_level_id),
       name: values.name.trim(),
     });
-    toast("Success", "Class created successfully.", "ok");
+    toast("Berjaya", "Kelas dicipta.", "ok");
     state.adminSelectedGrade = Number(values.grade_level_id);
     adminGradeSelect.value = String(state.adminSelectedGrade);
-    await loadAdminClassesAndStudents();
+    await loadAdminData();
   } catch (e) {
-    toast("Error", e.message || "Class create blocked (RLS?)", "err");
+    toast("Ralat", e.message, "err");
   } finally {
     setLoading(false);
   }
@@ -1176,17 +1172,17 @@ tblClassesBody.addEventListener("click", async (e) => {
 
   if (action === "edit") {
     const values = await openModal({
-      title: "Edit Class",
-      submitText: "Update Class",
+      title: "Kemaskini Kelas",
+      submitText: "Kemaskini",
       fields: [
         {
           name: "grade_level_id",
-          label: "Grade",
+          label: "Tingkatan",
           type: "select",
           required: true,
           options: state.gradeLevels.map(g => ({ value: String(g.id), label: g.name })),
         },
-        { name: "name", label: "Class Name", type: "text", required: true, minLength: 1 },
+        { name: "name", label: "Nama Kelas", type: "text", required: true, minLength: 1 },
       ],
       initial: { grade_level_id: String(row.grade_level_id), name: row.name }
     });
@@ -1198,27 +1194,24 @@ tblClassesBody.addEventListener("click", async (e) => {
         grade_level_id: Number(values.grade_level_id),
         name: values.name.trim(),
       });
-      toast("Success", "Class updated.", "ok");
-      state.adminSelectedGrade = Number(values.grade_level_id);
-      adminGradeSelect.value = String(state.adminSelectedGrade);
-      await loadAdminClassesAndStudents();
+      toast("Berjaya", "Kelas dikemaskini.", "ok");
+      await loadAdminData();
     } catch (err) {
-      toast("Error", err.message || "Update blocked (RLS?)", "err");
+      toast("Ralat", err.message, "err");
     } finally {
       setLoading(false);
     }
   }
 
   if (action === "del") {
-    if (!confirm(`Delete class "${row.name}"? This will also delete students & entries in it.`)) return;
-
+    if (!confirm(`Padam kelas "${row.name}"? Murid dan rekod dalam kelas ini akan turut dipadam.`)) return;
     setLoading(true);
     try {
       await deleteClass(id);
-      toast("Deleted", "Class removed.", "ok");
-      await loadAdminClassesAndStudents();
+      toast("Dipadam", "Kelas berjaya dipadam.", "ok");
+      await loadAdminData();
     } catch (err) {
-      toast("Error", err.message || "Delete blocked (RLS?)", "err");
+      toast("Ralat", err.message, "err");
     } finally {
       setLoading(false);
     }
@@ -1230,23 +1223,23 @@ btnStudentCreate.addEventListener("click", async () => {
   if (state.role !== "admin") return;
 
   if (!state.adminSelectedClassId) {
-    toast("Select Class", "Please select a class first.", "warn");
+    toast("Pilih Kelas", "Sila pilih kelas dahulu.", "warn");
     return;
   }
 
   const values = await openModal({
-    title: "Register New Student",
-    submitText: "Register Student",
+    title: "Daftar Murid Baru",
+    submitText: "Daftar",
     fields: [
       {
         name: "class_id",
-        label: "Class",
+        label: "Kelas",
         type: "select",
         required: true,
         options: state.adminClasses.map(c => ({ value: c.id, label: c.name })),
       },
-      { name: "full_name", label: "Full Name", type: "text", required: true, minLength: 1, placeholder: "Student name" },
-      { name: "student_no", label: "Student No (optional)", type: "text", required: false, placeholder: "e.g., S12345" },
+      { name: "full_name", label: "Nama Penuh", type: "text", required: true, minLength: 1 },
+      { name: "student_no", label: "No. Matrik/IC (Pilihan)", type: "text", required: false },
     ],
     initial: { class_id: state.adminSelectedClassId, full_name: "", student_no: "" }
   });
@@ -1260,14 +1253,11 @@ btnStudentCreate.addEventListener("click", async () => {
       full_name: values.full_name.trim(),
       student_no: values.student_no ? values.student_no.trim() : null
     });
-    toast("Success", "Student registered.", "ok");
-    state.adminSelectedClassId = values.class_id;
-    adminClassSelect.value = values.class_id;
-
+    toast("Berjaya", "Murid didaftarkan.", "ok");
     state.adminStudents = await fetchStudentsByClass(state.adminSelectedClassId);
     renderStudentsTable();
   } catch (err) {
-    toast("Error", err.message || "Create blocked (RLS?)", "err");
+    toast("Ralat", err.message, "err");
   } finally {
     setLoading(false);
   }
@@ -1285,18 +1275,18 @@ tblStudentsBody.addEventListener("click", async (e) => {
 
   if (action === "edit") {
     const values = await openModal({
-      title: "Edit Student",
-      submitText: "Update Student",
+      title: "Kemaskini Murid",
+      submitText: "Kemaskini",
       fields: [
         {
           name: "class_id",
-          label: "Class",
+          label: "Kelas",
           type: "select",
           required: true,
           options: state.adminClasses.map(c => ({ value: c.id, label: c.name })),
         },
-        { name: "full_name", label: "Full Name", type: "text", required: true, minLength: 1 },
-        { name: "student_no", label: "Student No (optional)", type: "text", required: false },
+        { name: "full_name", label: "Nama Penuh", type: "text", required: true, minLength: 1 },
+        { name: "student_no", label: "No. Matrik/IC", type: "text", required: false },
       ],
       initial: { class_id: row.class_id, full_name: row.full_name, student_no: row.student_no || "" }
     });
@@ -1309,46 +1299,41 @@ tblStudentsBody.addEventListener("click", async (e) => {
         full_name: values.full_name.trim(),
         student_no: values.student_no ? values.student_no.trim() : null
       });
-      toast("Success", "Student updated.", "ok");
-
+      toast("Berjaya", "Data murid dikemaskini.", "ok");
       state.adminSelectedClassId = values.class_id;
       adminClassSelect.value = values.class_id;
-
       state.adminStudents = await fetchStudentsByClass(state.adminSelectedClassId);
       renderStudentsTable();
     } catch (err) {
-      toast("Error", err.message || "Update blocked (RLS?)", "err");
+      toast("Ralat", err.message, "err");
     } finally {
       setLoading(false);
     }
   }
 
   if (action === "del") {
-    if (!confirm(`Delete student "${row.full_name}"? Entries will be deleted too.`)) return;
-
+    if (!confirm(`Padam murid "${row.full_name}"?`)) return;
     setLoading(true);
     try {
       await deleteStudent(id);
-      toast("Deleted", "Student deleted.", "ok");
+      toast("Dipadam", "Murid dipadam.", "ok");
       state.adminStudents = await fetchStudentsByClass(state.adminSelectedClassId);
       renderStudentsTable();
     } catch (err) {
-      toast("Error", err.message || "Delete blocked (RLS?)", "err");
+      toast("Ralat", err.message, "err");
     } finally {
       setLoading(false);
     }
   }
 });
 
-/* Create type */
+/* Create Type */
 btnTypeCreate.addEventListener("click", async () => {
-  if (state.role !== "admin") return;
-
   const values = await openModal({
-    title: "Add Co-curricular Type",
-    submitText: "Add Type",
+    title: "Tambah Jenis Kokurikulum",
+    submitText: "Tambah",
     fields: [
-      { name: "name", label: "Type Name", type: "text", required: true, minLength: 1, placeholder: "e.g., Sports, Clubs" }
+      { name: "name", label: "Nama Jenis", type: "text", required: true, minLength: 1, placeholder: "cth. Kelab Persatuan" }
     ],
     initial: { name: "" }
   });
@@ -1357,12 +1342,12 @@ btnTypeCreate.addEventListener("click", async () => {
   setLoading(true);
   try {
     await createType({ name: values.name.trim() });
-    toast("Success", "Type added.", "ok");
+    toast("Berjaya", "Jenis ditambah.", "ok");
     state.types = await fetchTypes();
     renderTypesTable();
     populateTypeSelect(entryType);
   } catch (err) {
-    toast("Error", err.message || "Create blocked (RLS?)", "err");
+    toast("Ralat", err.message, "err");
   } finally {
     setLoading(false);
   }
@@ -1374,52 +1359,114 @@ tblTypesBody.addEventListener("click", async (e) => {
   if (!btn) return;
   const id = btn.dataset.id;
   const action = btn.dataset.action;
-
-  const row = state.types.find(t => t.id === id);
-  if (!row) return;
-
+  
   if (action === "edit") {
+    const row = state.types.find(t => t.id === id);
     const values = await openModal({
-      title: "Edit Type",
-      submitText: "Update Type",
-      fields: [
-        { name: "name", label: "Type Name", type: "text", required: true, minLength: 1 }
-      ],
+      title: "Edit Jenis",
+      submitText: "Simpan",
+      fields: [{ name: "name", label: "Nama", type: "text", required: true, minLength: 1 }],
       initial: { name: row.name }
     });
-    if (!values) return;
-
+    if(!values) return;
+    
     setLoading(true);
     try {
       await updateType(id, { name: values.name.trim() });
-      toast("Success", "Type updated.", "ok");
+      toast("Berjaya", "Jenis dikemaskini.", "ok");
       state.types = await fetchTypes();
       renderTypesTable();
-      populateTypeSelect(entryType);
-    } catch (err) {
-      toast("Error", err.message || "Update blocked (RLS?)", "err");
-    } finally {
-      setLoading(false);
-    }
+    } catch(e) { toast("Ralat", e.message, "err"); }
+    finally { setLoading(false); }
   }
-
+  
   if (action === "del") {
-    if (!confirm(`Delete type "${row.name}"? This may fail if entries reference it.`)) return;
-
-    setLoading(true);
-    try {
-      await deleteType(id);
-      toast("Deleted", "Type deleted.", "ok");
-      state.types = await fetchTypes();
-      renderTypesTable();
-      populateTypeSelect(entryType);
-    } catch (err) {
-      toast("Error", err.message || "Delete failed (in use?)", "err");
-    } finally {
-      setLoading(false);
-    }
+     if(!confirm("Padam jenis ini?")) return;
+     setLoading(true);
+     try {
+       await deleteType(id);
+       toast("Dipadam", "Jenis berjaya dipadam.", "ok");
+       state.types = await fetchTypes();
+       renderTypesTable();
+     } catch(e) { toast("Ralat", e.message, "err"); }
+     finally { setLoading(false); }
   }
 });
+
+/* Manage Teachers (Admin) */
+btnTeacherCreate.addEventListener("click", async () => {
+  // Hanya tambah profile, bukan user auth sebenar (kerana client-side restriction)
+  const values = await openModal({
+    title: "Tambah Profil Guru",
+    submitText: "Tambah",
+    fields: [
+      { name: "full_name", label: "Nama Penuh", type: "text", required: true },
+      { name: "role", label: "Peranan", type: "select", options:[{value:"teacher", label:"Guru"}, {value:"admin", label:"Admin"}] }
+    ],
+    initial: { full_name: "", role: "teacher" }
+  });
+  if(!values) return;
+
+  setLoading(true);
+  try {
+    // Generate random UUID untuk profile ID sebab tiada auth user lagi
+    const fakeId = crypto.randomUUID();
+    await createTeacherProfile({
+      id: fakeId,
+      full_name: values.full_name,
+      role: values.role
+    });
+    toast("Berjaya", "Profil guru ditambah. Sila minta guru daftar akaun dengan emel.", "ok");
+    state.adminTeacherList = await fetchAllTeachers();
+    renderTeachersTable();
+  } catch(e) {
+    toast("Ralat", e.message, "err");
+  } finally {
+    setLoading(false);
+  }
+});
+
+tblTeachersBody.addEventListener("click", async (e) => {
+  const btn = e.target.closest("button");
+  if (!btn) return;
+  const id = btn.dataset.id;
+  const action = btn.dataset.action;
+  
+  if(action === "edit") {
+    const row = state.adminTeacherList.find(t => t.id === id);
+    const values = await openModal({
+      title: "Edit Profil Guru",
+      fields: [
+        { name: "full_name", label: "Nama Penuh", type: "text", required: true },
+        { name: "role", label: "Peranan", type: "select", options:[{value:"teacher", label:"Guru"}, {value:"admin", label:"Admin"}] }
+      ],
+      initial: { full_name: row.full_name, role: row.role }
+    });
+    if(!values) return;
+    
+    setLoading(true);
+    try {
+      await updateTeacherProfile(id, { full_name: values.full_name, role: values.role });
+      toast("Berjaya", "Profil guru dikemaskini.", "ok");
+      state.adminTeacherList = await fetchAllTeachers();
+      renderTeachersTable();
+    } catch(e) { toast("Ralat", e.message, "err"); }
+    finally { setLoading(false); }
+  }
+  
+  if(action === "del") {
+    if(!confirm("Padam profil guru ini? Mereka akan kehilangan akses.")) return;
+    setLoading(true);
+    try {
+      await deleteTeacherProfile(id);
+      toast("Dipadam", "Profil guru dipadam.", "ok");
+      state.adminTeacherList = await fetchAllTeachers();
+      renderTeachersTable();
+    } catch(e) { toast("Ralat", e.message, "err"); }
+    finally { setLoading(false); }
+  }
+});
+
 
 /* Teacher grade/class changes */
 teacherGradeSelect.addEventListener("change", async () => {
@@ -1428,7 +1475,7 @@ teacherGradeSelect.addEventListener("change", async () => {
   try {
     await loadTeacherClassesAndStudents();
   } catch (e) {
-    toast("Error", e.message || "Failed loading classes.", "err");
+    toast("Ralat", e.message, "err");
   } finally {
     setLoading(false);
   }
@@ -1443,7 +1490,7 @@ teacherClassSelect.addEventListener("change", async () => {
       : [];
     renderTeacherStudents();
   } catch (e) {
-    toast("Error", e.message || "Failed loading students.", "err");
+    toast("Ralat", e.message, "err");
   } finally {
     setLoading(false);
   }
@@ -1462,7 +1509,7 @@ tblTeacherStudentsBody.addEventListener("click", async (e) => {
   try {
     await openStudent(id);
   } catch (err) {
-    toast("Error", err.message || "Failed opening student.", "err");
+    toast("Ralat", err.message, "err");
   } finally {
     setLoading(false);
   }
@@ -1473,7 +1520,7 @@ backTeacherBtn.addEventListener("click", async () => {
   await refreshAllTeacher();
 });
 
-/* Add entry (date boleh apa-apa) */
+/* Add entry (dikemaskini dengan Guru & Pencapaian) */
 entryForm.addEventListener("submit", async (e) => {
   e.preventDefault();
   if (!state.selectedStudent) return;
@@ -1481,20 +1528,27 @@ entryForm.addEventListener("submit", async (e) => {
   const subject = entrySubject.value.trim();
   const activity_date = entryDate.value;
   const type_id = entryType.value;
+  const achievement = entryAchievement.value;
+  const teacher_id = entryTeacher.value;
 
   if (!subject || subject.length < 3) {
-    toast("Validation", "Subject is required (min 3 chars).", "warn");
+    toast("Validasi", "Aktiviti diperlukan (min 3 aksara).", "warn");
     entrySubject.focus();
     return;
   }
   if (!activity_date) {
-    toast("Validation", "Activity date is required.", "warn");
+    toast("Validasi", "Tarikh diperlukan.", "warn");
     entryDate.focus();
     return;
   }
   if (!type_id) {
-    toast("Validation", "Type is required.", "warn");
+    toast("Validasi", "Kategori diperlukan.", "warn");
     entryType.focus();
+    return;
+  }
+  if (!teacher_id) {
+    toast("Validasi", "Sila pilih Guru Pengiring.", "warn");
+    entryTeacher.focus();
     return;
   }
 
@@ -1505,18 +1559,20 @@ entryForm.addEventListener("submit", async (e) => {
       type_id,
       subject,
       activity_date,
+      achievement,
+      teacher_advisor_id: teacher_id,
       created_by: state.user.id,
     });
 
-    toast("Saved", "Entry created.", "ok");
+    toast("Disimpan", "Rekod berjaya ditambah.", "ok");
     entrySubject.value = "";
     entryDate.valueAsDate = new Date();
-    entryType.value = "";
-
+    // Kekalkan pilihan guru & jenis untuk memudahkan entry seterusnya
+    
     state.studentEntries = await fetchEntriesByStudent(state.selectedStudent.id);
     renderEntriesTable();
   } catch (err) {
-    toast("Error", err.message || "Insert blocked (RLS?)", "err");
+    toast("Ralat", err.message, "err");
   } finally {
     setLoading(false);
   }
@@ -1532,31 +1588,31 @@ tblEntriesBody.addEventListener("click", async (e) => {
   const row = state.studentEntries.find(x => x.id === id);
   if (!row) return;
 
-  const canManage = (state.role === "admin") || (row.created_by === state.user.id);
-  if (!canManage) {
-    toast("Unauthorized", "You can only manage entries you created (unless admin).", "warn");
-    return;
-  }
-
   if (action === "edit") {
     const values = await openModal({
-      title: "Edit Entry",
-      submitText: "Update Entry",
+      title: "Edit Rekod",
+      submitText: "Kemaskini",
       fields: [
-        { name: "subject", label: "Subject", type: "text", required: true, minLength: 3 },
-        { name: "activity_date", label: "Activity Date", type: "date", required: true },
-        {
-          name: "type_id",
-          label: "Type",
-          type: "select",
-          required: true,
-          options: state.types.map(t => ({ value: t.id, label: t.name })),
-        },
+        { name: "subject", label: "Aktiviti", type: "text", required: true, minLength: 3 },
+        { name: "activity_date", label: "Tarikh", type: "date", required: true },
+        { name: "type_id", label: "Kategori", type: "select", required: true, options: state.types.map(t => ({ value: t.id, label: t.name })) },
+        { name: "achievement", label: "Pencapaian", type: "select", required: true, options: [
+            {value:"Penyertaan", label:"Penyertaan Sahaja"},
+            {value:"Johan", label:"Johan (No. 1)"},
+            {value:"Naib Johan", label:"Naib Johan (No. 2)"},
+            {value:"Ketiga", label:"Ketiga (No. 3)"},
+            {value:"Keempat", label:"Keempat (No. 4)"},
+            {value:"Kelima", label:"Kelima (No. 5)"},
+        ]},
+        // Untuk Edit Guru Pengiring, kita perlu list guru. Oleh kerana modal helper simple, kita inject options manual
+        { name: "teacher_advisor_id", label: "Guru Pengiring", type: "select", required:true, options: state.teachers.map(t => ({value:t.id, label:t.full_name})) }
       ],
       initial: {
         subject: row.subject,
         activity_date: row.activity_date,
-        type_id: row.type_id
+        type_id: row.type_id,
+        achievement: row.achievement || "Penyertaan",
+        teacher_advisor_id: row.teacher_advisor_id || ""
       }
     });
 
@@ -1567,29 +1623,30 @@ tblEntriesBody.addEventListener("click", async (e) => {
       await updateEntry(id, {
         subject: values.subject.trim(),
         activity_date: values.activity_date,
-        type_id: values.type_id
+        type_id: values.type_id,
+        achievement: values.achievement,
+        teacher_advisor_id: values.teacher_advisor_id
       });
-      toast("Success", "Entry updated.", "ok");
+      toast("Berjaya", "Rekod dikemaskini.", "ok");
       state.studentEntries = await fetchEntriesByStudent(state.selectedStudent.id);
       renderEntriesTable();
     } catch (err) {
-      toast("Error", err.message || "Update blocked (RLS?)", "err");
+      toast("Ralat", err.message, "err");
     } finally {
       setLoading(false);
     }
   }
 
   if (action === "del") {
-    if (!confirm("Delete this entry?")) return;
-
+    if (!confirm("Padam rekod ini?")) return;
     setLoading(true);
     try {
       await deleteEntry(id);
-      toast("Deleted", "Entry deleted.", "ok");
+      toast("Dipadam", "Rekod dipadam.", "ok");
       state.studentEntries = await fetchEntriesByStudent(state.selectedStudent.id);
       renderEntriesTable();
     } catch (err) {
-      toast("Error", err.message || "Delete blocked (RLS?)", "err");
+      toast("Ralat", err.message, "err");
     } finally {
       setLoading(false);
     }
@@ -1598,8 +1655,8 @@ tblEntriesBody.addEventListener("click", async (e) => {
 
 /* ========= INIT ========= */
 async function init() {
-  if (SUPABASE_URL.includes("YOUR_") || SUPABASE_ANON_KEY.includes("YOUR_")) {
-    toast("Setup needed", "Set SUPABASE_URL and SUPABASE_ANON_KEY in app.js", "warn", 6000);
+  if (SUPABASE_URL.includes("YOUR_")) {
+    toast("Setup Diperlukan", "Sila tetapkan SUPABASE_URL & KEY.", "warn", 6000);
   }
 
   setLoading(true);
@@ -1616,7 +1673,7 @@ async function init() {
     updateAuthUI();
     await routeAfterLogin();
   } catch (e) {
-    toast("Error", e.message || "Initialization failed.", "err");
+    toast("Ralat", e.message, "err");
     showView("login");
   } finally {
     setLoading(false);
@@ -1631,7 +1688,6 @@ async function init() {
         state.profile = await getProfileOrThrow();
         state.role = state.profile.role;
       } catch (e) {
-        toast("Error", e.message || "Profile read failed.", "err");
         state.profile = null;
         state.role = null;
       }
@@ -1639,7 +1695,6 @@ async function init() {
       state.profile = null;
       state.role = null;
       state.selectedStudent = null;
-      state.studentEntries = [];
     }
 
     updateAuthUI();

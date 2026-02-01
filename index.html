@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="en">
+<html lang="ms">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>PAJSK Achievement Management</title>
+  <title>Sistem Pengurusan PAJSK</title>
   
   <!-- Fonts: Outfit (Modern Sans) -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -12,6 +12,9 @@
   
   <!-- Icons: Phosphor Icons -->
   <script src="https://unpkg.com/@phosphor-icons/web"></script>
+  
+  <!-- SheetJS untuk Eksport Excel -->
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
 
   <link rel="stylesheet" href="styles.css" />
 </head>
@@ -25,7 +28,7 @@
         </div>
         <div class="brand-text">
           <div class="brand-title">PAJSK</div>
-          <div class="brand-sub">Achievement System</div>
+          <div class="brand-sub">Sistem Pencapaian</div>
         </div>
       </div>
 
@@ -42,25 +45,25 @@
       <nav class="nav">
         <button id="nav-login" class="nav-btn" data-nav="login">
           <i class="ph ph-sign-in"></i>
-          <span>Login</span>
+          <span>Log Masuk</span>
         </button>
         <button id="nav-admin" class="nav-btn requires-auth hidden" data-nav="admin">
           <i class="ph ph-gear-six"></i>
-          <span>Admin Console</span>
+          <span>Konsol Admin</span>
         </button>
         <button id="nav-teacher" class="nav-btn requires-auth hidden" data-nav="teacher">
           <i class="ph ph-chalkboard-teacher"></i>
-          <span>Teacher Dashboard</span>
+          <span>Dashboard Guru</span>
         </button>
       </nav>
 
       <div class="sidebar-footer">
         <button id="btn-logout" class="btn-logout requires-auth hidden">
           <i class="ph ph-sign-out"></i>
-          <span>Logout</span>
+          <span>Log Keluar</span>
         </button>
         <div class="hint">
-          <i class="ph ph-code"></i> Static SPA (Vercel-ready)<br/>
+          <i class="ph ph-code"></i> Sistem SPA Statik<br/>
           <i class="ph ph-database"></i> Supabase Auth + RLS
         </div>
       </div>
@@ -75,24 +78,24 @@
 
       <!-- LOGIN VIEW -->
       <section id="view-login" class="view">
-        <div class="login-container">
+        <div class="login-wrapper">
           <div class="login-header">
-            <h1>Welcome Back</h1>
-            <p class="muted">Enter your credentials to access the system.</p>
+            <h1>Selamat Datang</h1>
+            <p class="muted">Sila log masuk untuk mengakses sistem.</p>
           </div>
 
           <div class="card login-card">
             <form id="form-login" class="form">
               <div class="field">
-                <label for="login-email">Email Address</label>
+                <label for="login-email">Alamat Emel</label>
                 <div class="input-icon-wrapper">
                   <i class="ph ph-envelope"></i>
-                  <input id="login-email" type="email" autocomplete="email" required placeholder="name@school.com" />
+                  <input id="login-email" type="email" autocomplete="email" required placeholder="nama@sekolah.edu.my" />
                 </div>
               </div>
 
               <div class="field">
-                <label for="login-password">Password</label>
+                <label for="login-password">Kata Laluan</label>
                 <div class="input-icon-wrapper">
                   <i class="ph ph-lock-key"></i>
                   <input id="login-password" type="password" autocomplete="current-password" required placeholder="••••••••" />
@@ -100,13 +103,13 @@
               </div>
 
               <div class="form-actions">
-                <button class="btn primary full-width" type="submit">Sign In</button>
-                <button class="btn text full-width" type="button" id="btn-go-signup">Create Teacher Account</button>
+                <button class="btn primary full-width" type="submit">Log Masuk</button>
+                <button class="btn text full-width" type="button" id="btn-go-signup">Daftar Akaun Guru Baru</button>
               </div>
 
               <div class="security-note">
                 <i class="ph ph-shield-check"></i>
-                Admin access is enforced by <b>database RLS</b>.
+                Akses dikawal oleh <b>Supabase RLS</b>.
               </div>
             </form>
           </div>
@@ -116,26 +119,26 @@
         <div id="signup-panel" class="modal-overlay hidden">
           <div class="card modal-card">
             <div class="card-header">
-              <h2>New Teacher Account</h2>
+              <h2>Daftar Akaun Guru</h2>
               <button type="button" class="btn-icon" id="btn-cancel-signup"><i class="ph ph-x"></i></button>
             </div>
             <p class="muted small mb-4">
-              Default role is <b>Teacher</b>. Admins must be promoted via Supabase.
+              Peranan lalai adalah <b>Guru</b>. Admin perlu mengesahkan jika perlu akses admin.
             </p>
 
             <form id="form-signup" class="form">
               <div class="field">
-                <label for="signup-email">Email</label>
-                <input id="signup-email" type="email" autocomplete="email" required placeholder="newteacher@school.com" />
+                <label for="signup-email">Emel</label>
+                <input id="signup-email" type="email" autocomplete="email" required placeholder="cikgu@sekolah.edu.my" />
               </div>
 
               <div class="field">
-                <label for="signup-password">Password</label>
-                <input id="signup-password" type="password" autocomplete="new-password" required minlength="6" placeholder="Min 6 chars" />
+                <label for="signup-password">Kata Laluan</label>
+                <input id="signup-password" type="password" autocomplete="new-password" required minlength="6" placeholder="Min 6 aksara" />
               </div>
 
               <div class="row right mt-4">
-                <button class="btn primary" type="submit">Sign Up</button>
+                <button class="btn primary" type="submit">Daftar Sekarang</button>
               </div>
             </form>
           </div>
@@ -146,101 +149,144 @@
       <section id="view-admin" class="view hidden">
         <header class="view-header">
           <div class="header-content">
-            <h1>Admin Console</h1>
-            <div class="muted">Manage academic structure and user base.</div>
+            <h1>Konsol Admin</h1>
+            <div class="muted">Uruskan struktur akademik, guru dan murid.</div>
           </div>
           <button id="btn-export-admin" class="btn secondary">
-            <i class="ph ph-download-simple"></i> Export All CSV
+            <i class="ph ph-file-xls"></i> Muat Turun Laporan Lengkap (Excel)
           </button>
         </header>
 
-        <div class="grid-2">
-          <!-- Classes -->
-          <div class="card">
-            <div class="card-header">
-              <div class="header-title">
-                <i class="ph ph-chalkboard"></i>
-                <h2>Classes</h2>
+        <!-- Tab Navigasi Admin -->
+        <div class="tabs-nav mb-4">
+          <button class="tab-btn active" data-tab="admin-classes">Kelas & Murid</button>
+          <button class="tab-btn" data-tab="admin-teachers">Senarai Guru</button>
+          <button class="tab-btn" data-tab="admin-types">Jenis Kokurikulum</button>
+        </div>
+
+        <!-- Tab Content: Kelas & Murid -->
+        <div id="tab-admin-classes" class="tab-content">
+          <div class="grid-2">
+            <!-- Classes -->
+            <div class="card">
+              <div class="card-header">
+                <div class="header-title">
+                  <i class="ph ph-chalkboard"></i>
+                  <h2>Senarai Kelas</h2>
+                </div>
+                <button id="btn-class-create" class="btn sm primary">
+                  <i class="ph ph-plus"></i> Baru
+                </button>
               </div>
-              <button id="btn-class-create" class="btn sm primary">
-                <i class="ph ph-plus"></i> New
-              </button>
-            </div>
-            
-            <div class="filter-bar">
-               <label for="admin-grade-select" class="small-label">Filter Grade:</label>
-               <select id="admin-grade-select"></select>
-            </div>
-
-            <div class="table-container">
-              <table class="table" id="tbl-classes">
-                <thead>
-                  <tr>
-                    <th>Class Name</th>
-                    <th>Grade</th>
-                    <th class="right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody></tbody>
-              </table>
-            </div>
-            <div class="card-footer-hint">Deleting a class cascades to students.</div>
-          </div>
-
-          <!-- Students -->
-          <div class="card">
-            <div class="card-header">
-              <div class="header-title">
-                <i class="ph ph-student"></i>
-                <h2>Students</h2>
+              
+              <div class="filter-bar">
+                 <label for="admin-grade-select" class="small-label">Tapis Tingkatan:</label>
+                 <select id="admin-grade-select"></select>
               </div>
-              <button id="btn-student-create" class="btn sm primary">
-                <i class="ph ph-plus"></i> New
-              </button>
+
+              <div class="table-container">
+                <table class="table" id="tbl-classes">
+                  <thead>
+                    <tr>
+                      <th>Nama Kelas</th>
+                      <th>Tingkatan</th>
+                      <th class="right">Tindakan</th>
+                    </tr>
+                  </thead>
+                  <tbody></tbody>
+                </table>
+              </div>
             </div>
 
-            <div class="filter-bar">
-              <label for="admin-class-select" class="small-label">Select Class:</label>
-              <select id="admin-class-select"></select>
-            </div>
+            <!-- Students -->
+            <div class="card">
+              <div class="card-header">
+                <div class="header-title">
+                  <i class="ph ph-student"></i>
+                  <h2>Senarai Murid</h2>
+                </div>
+                <button id="btn-student-create" class="btn sm primary">
+                  <i class="ph ph-plus"></i> Baru
+                </button>
+              </div>
 
-            <div class="table-container">
-              <table class="table" id="tbl-students">
-                <thead>
-                  <tr>
-                    <th>Student Name</th>
-                    <th>ID No.</th>
-                    <th class="right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody></tbody>
-              </table>
+              <div class="filter-bar">
+                <label for="admin-class-select" class="small-label">Pilih Kelas:</label>
+                <select id="admin-class-select"></select>
+              </div>
+
+              <div class="table-container">
+                <table class="table" id="tbl-students">
+                  <thead>
+                    <tr>
+                      <th>Nama Murid</th>
+                      <th>No. KP/ID</th>
+                      <th class="right">Tindakan</th>
+                    </tr>
+                  </thead>
+                  <tbody></tbody>
+                </table>
+              </div>
             </div>
           </div>
         </div>
 
-        <!-- Types -->
-        <div class="card mt-4">
-          <div class="card-header">
-            <div class="header-title">
-              <i class="ph ph-tag"></i>
-              <h2>Co-curricular Types</h2>
+        <!-- Tab Content: Guru -->
+        <div id="tab-admin-teachers" class="tab-content hidden">
+          <div class="card">
+            <div class="card-header">
+              <div class="header-title">
+                <i class="ph ph-chalkboard-teacher"></i>
+                <h2>Pengurusan Guru</h2>
+              </div>
+              <button id="btn-teacher-create" class="btn sm primary">
+                <i class="ph ph-plus"></i> Tambah Guru (Profil)
+              </button>
             </div>
-            <button id="btn-type-create" class="btn sm primary">
-              <i class="ph ph-plus"></i> New Type
-            </button>
+            <div class="card-body">
+              <p class="muted small mb-4">
+                Nota: Menambah guru di sini mencipta profil dalam sistem. Untuk log masuk, guru perlu mendaftar akaun menggunakan emel yang sama atau anda perlu menjemput mereka.
+              </p>
+              <div class="table-container">
+                <table class="table" id="tbl-teachers">
+                  <thead>
+                    <tr>
+                      <th>Nama Penuh</th>
+                      <th>Peranan</th>
+                      <th class="right">Tindakan</th>
+                    </tr>
+                  </thead>
+                  <tbody></tbody>
+                </table>
+              </div>
+            </div>
           </div>
+        </div>
 
-          <div class="table-container">
-            <table class="table" id="tbl-types">
-              <thead>
-                <tr>
-                  <th>Type Name</th>
-                  <th class="right">Actions</th>
-                </tr>
-              </thead>
-              <tbody></tbody>
-            </table>
+        <!-- Tab Content: Jenis Koko -->
+        <div id="tab-admin-types" class="tab-content hidden">
+          <div class="card mt-4">
+            <div class="card-header">
+              <div class="header-title">
+                <i class="ph ph-tag"></i>
+                <h2>Jenis Kokurikulum</h2>
+              </div>
+              <button id="btn-type-create" class="btn sm primary">
+                <i class="ph ph-plus"></i> Jenis Baru
+              </button>
+            </div>
+
+            <div class="table-container">
+              <table class="table" id="tbl-types">
+                <thead>
+                  <tr>
+                    <th>Nama Jenis</th>
+                    <th class="right">Tindakan</th>
+                  </tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
           </div>
         </div>
       </section>
@@ -249,35 +295,33 @@
       <section id="view-teacher" class="view hidden">
         <header class="view-header">
           <div class="header-content">
-            <h1>Teacher Dashboard</h1>
-            <div class="muted">Record and manage student achievements.</div>
+            <h1>Dashboard Guru</h1>
+            <div class="muted">Rekod dan urus pencapaian murid.</div>
           </div>
-          <button id="btn-export-teacher" class="btn secondary">
-            <i class="ph ph-download-simple"></i> Export Data
-          </button>
+          <!-- Butang Eksport Guru dikeluarkan, gunakan di Admin untuk full report atau di detail murid -->
         </header>
 
         <div class="card">
           <div class="filters-row">
             <div class="filter-group">
-              <label for="teacher-grade-select">Grade</label>
+              <label for="teacher-grade-select">Tingkatan</label>
               <div class="select-wrapper">
                 <select id="teacher-grade-select"></select>
               </div>
             </div>
 
             <div class="filter-group">
-              <label for="teacher-class-select">Class</label>
+              <label for="teacher-class-select">Kelas</label>
               <div class="select-wrapper">
                 <select id="teacher-class-select" disabled></select>
               </div>
             </div>
 
             <div class="filter-group grow">
-              <label for="student-search">Search Student</label>
+              <label for="student-search">Carian Murid</label>
               <div class="input-icon-wrapper">
                 <i class="ph ph-magnifying-glass"></i>
-                <input id="student-search" type="text" placeholder="Start typing name..." />
+                <input id="student-search" type="text" placeholder="Mula taip nama..." />
               </div>
             </div>
           </div>
@@ -286,9 +330,9 @@
             <table class="table" id="tbl-teacher-students">
               <thead>
                 <tr>
-                  <th>Student Name</th>
-                  <th>Student No</th>
-                  <th class="right">Action</th>
+                  <th>Nama Murid</th>
+                  <th>No Pelajar</th>
+                  <th class="right">Tindakan</th>
                 </tr>
               </thead>
               <tbody></tbody>
@@ -301,7 +345,7 @@
       <section id="view-student-detail" class="view hidden">
         <div class="breadcrumb">
           <button id="btn-back-teacher" class="btn-text">
-            <i class="ph ph-arrow-left"></i> Back to List
+            <i class="ph ph-arrow-left"></i> Kembali ke Senarai
           </button>
         </div>
 
@@ -311,12 +355,12 @@
               <i class="ph ph-student"></i>
             </div>
             <div>
-              <h1 id="student-detail-title">Student Name</h1>
-              <div id="student-detail-sub" class="badge-outline">Grade • Class</div>
+              <h1 id="student-detail-title">Nama Murid</h1>
+              <div id="student-detail-sub" class="badge-outline">Tingkatan • Kelas</div>
             </div>
           </div>
           <button id="btn-export-student" class="btn secondary">
-            <i class="ph ph-file-csv"></i> Export History
+            <i class="ph ph-file-csv"></i> Eksport Sejarah
           </button>
         </div>
 
@@ -324,25 +368,51 @@
           <!-- Add Entry Form -->
           <div class="card h-fit">
             <div class="card-header">
-              <h3>New Entry</h3>
+              <h3>Rekod Baru</h3>
             </div>
             <form id="form-entry" class="form">
               <div class="field">
-                <label for="entry-subject">Activity / Achievement</label>
-                <input id="entry-subject" type="text" minlength="3" required placeholder="e.g. Badminton District Champion" />
+                <label for="entry-subject">Aktiviti / Pencapaian</label>
+                <input id="entry-subject" type="text" minlength="3" required placeholder="Contoh: Kejohanan Badminton Daerah" />
               </div>
+              
               <div class="field">
-                <label for="entry-date">Date</label>
+                <label for="entry-date">Tarikh</label>
                 <input id="entry-date" type="date" required />
               </div>
+
               <div class="field">
-                <label for="entry-type">Category</label>
+                <label for="entry-type">Kategori / Unit</label>
                 <div class="select-wrapper">
                   <select id="entry-type" required></select>
                 </div>
               </div>
+
+              <div class="field">
+                <label for="entry-achievement">Pencapaian (Kedudukan)</label>
+                <div class="select-wrapper">
+                  <select id="entry-achievement" required>
+                    <option value="Penyertaan">Penyertaan Sahaja</option>
+                    <option value="Johan">Johan (No. 1)</option>
+                    <option value="Naib Johan">Naib Johan (No. 2)</option>
+                    <option value="Ketiga">Ketiga (No. 3)</option>
+                    <option value="Keempat">Keempat (No. 4)</option>
+                    <option value="Kelima">Kelima (No. 5)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="field">
+                <label for="entry-teacher">Guru Pengiring / Penasihat</label>
+                <div class="select-wrapper">
+                  <select id="entry-teacher" required>
+                    <option value="">Pilih Guru...</option>
+                  </select>
+                </div>
+              </div>
+
               <button class="btn primary full-width mt-2" type="submit">
-                <i class="ph ph-floppy-disk"></i> Save Record
+                <i class="ph ph-floppy-disk"></i> Simpan Rekod
               </button>
             </form>
           </div>
@@ -350,17 +420,17 @@
           <!-- History Table -->
           <div class="card">
             <div class="card-header">
-              <h3>Achievement History</h3>
+              <h3>Sejarah Pencapaian</h3>
             </div>
             <div class="table-container">
               <table class="table" id="tbl-entries">
                 <thead>
                   <tr>
-                    <th>Date</th>
-                    <th>Category</th>
-                    <th>Activity</th>
-                    <th>Author</th>
-                    <th class="right">Actions</th>
+                    <th>Tarikh</th>
+                    <th>Aktiviti</th>
+                    <th>Pencapaian</th>
+                    <th>Guru Pengiring</th>
+                    <th class="right">Tindakan</th>
                   </tr>
                 </thead>
                 <tbody></tbody>
@@ -379,7 +449,7 @@
   <div id="loading-overlay" class="hidden">
     <div class="loading-content">
       <div class="spinner"></div>
-      <div class="loading-text">Processing...</div>
+      <div class="loading-text">Sedang Memproses...</div>
     </div>
   </div>
 
@@ -387,13 +457,13 @@
   <dialog id="modal">
     <form id="modal-form" method="dialog">
       <div class="modal-header">
-        <h3 id="modal-title">Title</h3>
+        <h3 id="modal-title">Tajuk</h3>
         <button type="button" onclick="closeModal()" class="btn-icon-close"><i class="ph ph-x"></i></button>
       </div>
       <div id="modal-body" class="modal-body"></div>
       <div class="modal-footer">
-        <button type="button" id="modal-cancel" class="btn secondary">Cancel</button>
-        <button type="submit" id="modal-submit" class="btn primary">Save Changes</button>
+        <button type="button" id="modal-cancel" class="btn secondary">Batal</button>
+        <button type="submit" id="modal-submit" class="btn primary">Simpan</button>
       </div>
     </form>
   </dialog>
