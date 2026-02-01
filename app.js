@@ -1,6 +1,6 @@
 /**
  * KONFIGURASI SUPABASE
- * Menggunakan credentials baru yang anda berikan.
+ * Menggunakan credentials yang anda berikan.
  */
 const SUPABASE_URL = "https://dflpaypdadctuhrcmavq.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRmbHBheXBkYWRjdHVocmNtYXZxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk5MTcwMTcsImV4cCI6MjA4NTQ5MzAxN30.YZVfciWmp7s0NofEtjGayb175RT1lZsLVoMuzZDjfdc";
@@ -23,25 +23,38 @@ const app = {
 
     init: async () => {
         console.log("Aplikasi dimulakan...");
+        
+        // --- PEMBAIKAN UTAMA DI SINI ---
+        // Kita setup event listener DAHULU sebelum buat kerja async (network).
+        // Ini memastikan butang Login sentiasa boleh ditekan.
+        app.setupEventListeners();
+
         app.showLoading(true);
 
         try {
             // 1. Semak status login semasa (Session Check)
-            const { data: { session } } = await supabase.auth.getSession();
+            if (!supabase) throw new Error("Supabase Client not initialized");
+
+            const { data: { session }, error } = await supabase.auth.getSession();
             
+            if (error) {
+                console.warn("Ralat sesi:", error.message);
+                // Jangan crash, cuma anggap user belum login
+            }
+
             if (session) {
                 console.log("Sesi dijumpai:", session.user.email);
                 app.state.user = session.user;
                 
-                // Cuba tarik data, tapi jangan crash jika gagal
+                // Cuba tarik data
                 try {
                     await app.fetchProfile();
                     await app.fetchCommonData();
+                    app.routeUser();
                 } catch (dataErr) {
-                    console.warn("Amaran data:", dataErr);
+                    console.error("Ralat memuatkan data pengguna:", dataErr);
+                    app.showView('login');
                 }
-                
-                app.routeUser();
             } else {
                 app.showView('login');
             }
@@ -54,7 +67,7 @@ const app = {
                     app.state.profile = null;
                     app.showView('login');
                 } else if (event === 'SIGNED_IN' && session) {
-                    // Logic ini backup jika flow manual handleLogin tidak jalan
+                    // Logic backup jika flow manual handleLogin tidak jalan
                     if (!app.state.user) { 
                         app.state.user = session.user;
                         await app.fetchProfile();
@@ -63,12 +76,10 @@ const app = {
                 }
             });
 
-            app.setupEventListeners();
-
         } catch (err) {
             console.error("Init Error:", err);
-            app.toast("Ralat memulakan aplikasi", "error");
-            app.showView('login'); // Fallback ke login jika semua gagal
+            // Jangan tunjuk toast error kepada user yang belum login, cuma bawa ke login page
+            app.showView('login'); 
         } finally {
             app.showLoading(false);
         }
@@ -78,12 +89,24 @@ const app = {
 
     handleLogin: async (e) => {
         e.preventDefault();
-        const email = document.getElementById('login-email').value;
-        const password = document.getElementById('login-password').value;
+        console.log("Percubaan log masuk bermula..."); // Debugging log
+
+        const emailEl = document.getElementById('login-email');
+        const passEl = document.getElementById('login-password');
+
+        if (!emailEl || !passEl) {
+            console.error("Elemen form tidak dijumpai!");
+            return;
+        }
+
+        const email = emailEl.value;
+        const password = passEl.value;
         
         app.showLoading(true);
         
         try {
+            if (!supabase) throw new Error("Sambungan ke pangkalan data gagal.");
+
             const { data, error } = await supabase.auth.signInWithPassword({ email, password });
             
             if (error) throw error;
@@ -100,7 +123,12 @@ const app = {
             
         } catch (error) {
             console.error("Login Error:", error);
-            app.toast(`Gagal Log Masuk: ${error.message}`, 'error');
+            // Mesej error yang lebih mesra pengguna
+            let msg = error.message;
+            if (msg.includes("Invalid login credentials")) msg = "Emel atau kata laluan salah.";
+            if (msg.includes("Email not confirmed")) msg = "Sila sahkan emel anda dahulu.";
+            
+            app.toast(`Gagal Log Masuk: ${msg}`, 'error');
         } finally {
             app.showLoading(false);
         }
@@ -125,10 +153,8 @@ const app = {
                 .single();
             
             if (error || !data) {
-                console.warn('Profile tidak dijumpai dalam DB (Mungkin user baru atau trigger gagal). Menggunakan fallback.');
-                // FALLBACK PENTING:
-                // Jika DB tak ada data profile, kita buat object sementara
-                // supaya app tak crash (Blank Screen).
+                console.warn('Profile tidak dijumpai dalam DB. Menggunakan fallback.');
+                // FALLBACK:
                 const isLikelyAdmin = app.state.user.email.toLowerCase().includes('admin');
                 app.state.profile = { 
                     role: isLikelyAdmin ? 'admin' : 'teacher', 
@@ -142,30 +168,24 @@ const app = {
             const roleDisplay = app.state.profile.role ? app.state.profile.role.toUpperCase() : 'USER';
             const nameDisplay = app.state.profile.full_name || app.state.user.email;
             
-            const nameEl = document.getElementById('nav-user-info'); // ID dalam sidebar HTML baru
+            const nameEl = document.getElementById('nav-user-info');
             if (nameEl) nameEl.innerText = `${nameDisplay} (${roleDisplay})`;
 
         } catch (err) {
             console.error("Critical Profile Error:", err);
-            // Safety Net terakhir
             app.state.profile = { role: 'teacher', full_name: 'User' };
         }
     },
 
     routeUser: () => {
-        // Pastikan sidebar wujud dan hidden class dibuang
         const sidebar = document.getElementById('sidebar');
         if (sidebar) sidebar.classList.remove('hidden');
 
-        // Tentukan paparan berdasarkan peranan (role)
-        // Guna optional chaining (?.) untuk elak error jika profile null
         const role = app.state.profile?.role || 'teacher';
         const isAdmin = role === 'admin';
         
         const navAdmin = document.getElementById('nav-admin');
-        const navTeacher = document.getElementById('nav-teacher');
         
-        // Reset active links
         document.querySelectorAll('.nav-links a').forEach(a => a.classList.remove('active'));
 
         if (isAdmin) {
@@ -187,27 +207,24 @@ const app = {
             app.state.grades = data;
             app.populateDropdown('class-grade', app.state.grades, 'id', 'name');
             app.populateDropdown('teacher-select-grade', app.state.grades, 'id', 'name', true);
+            app.populateDropdown('admin-class-grade-filter', app.state.grades, 'id', 'name', true);
         }
     },
 
     // --- PENGURUSAN PAPARAN (VIEW MANAGEMENT) ---
 
     showView: (viewName) => {
-        // Sembunyikan semua seksyen
         document.querySelectorAll('.view-section').forEach(el => el.classList.add('hidden'));
         
-        // Jika login screen, sembunyikan sidebar juga
         if (viewName === 'login') {
             document.getElementById('sidebar').classList.add('hidden');
             document.getElementById('view-login').classList.remove('hidden');
             return;
         }
 
-        // Tunjuk paparan yang dipilih
         const viewEl = document.getElementById(`view-${viewName}`);
         if(viewEl) viewEl.classList.remove('hidden');
 
-        // Semakan Keselamatan
         if (viewName === 'admin' && app.state.profile?.role !== 'admin') {
             app.toast('Akses Disekat: Anda bukan Admin', 'error');
             app.showView('teacher');
@@ -217,38 +234,27 @@ const app = {
     // --- LOGIK ADMIN ---
 
     switchAdminTab: (tabName) => {
-        // UI Toggle Butang
         document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
         const btn = document.querySelector(`.tab-btn[onclick*="${tabName}"]`);
         if(btn) btn.classList.add('active');
         
-        // UI Toggle Kandungan
         document.querySelectorAll('.admin-tab-content').forEach(d => d.classList.add('hidden'));
         const content = document.getElementById(`admin-tab-${tabName}`);
         if(content) content.classList.remove('hidden');
 
-        // Muatkan Data
         if (tabName === 'classes') app.loadAdminClasses();
         if (tabName === 'students') app.loadAdminStudents();
         if (tabName === 'types') app.loadAdminTypes();
     },
 
-    // 1. Admin: Kelas
     loadAdminClasses: async () => {
-        // Elak loading spinner blocking UI flow kalau error kecil
-        const gradeFilter = document.getElementById('admin-class-grade-filter').value;
+        const gradeFilter = document.getElementById('admin-class-grade-filter')?.value;
         let query = supabase.from('classes').select('*, grade_levels(name)');
         if (gradeFilter) query = query.eq('grade_level_id', gradeFilter);
         
         const { data, error } = await query.order('name');
 
         if (error) return app.toast(error.message, 'error');
-
-        // Isi Dropdown filter jika kosong (kali pertama)
-        const filterEl = document.getElementById('admin-class-grade-filter');
-        if (filterEl && filterEl.children.length <= 1) {
-            app.populateDropdown('admin-class-grade-filter', app.state.grades, 'id', 'name', true);
-        }
 
         const tbody = document.getElementById('table-classes-body');
         if (!tbody) return;
@@ -296,12 +302,10 @@ const app = {
         else app.loadAdminClasses();
     },
 
-    // 2. Admin: Pelajar
     loadAdminStudents: async () => {
         const classFilterEl = document.getElementById('admin-student-class-filter');
         const studentClassSelect = document.getElementById('student-class-select');
         
-        // Populate dropdowns once
         if (classFilterEl && classFilterEl.children.length <= 1) {
             const {data} = await supabase.from('classes').select('*').order('name');
             if(data) {
@@ -310,8 +314,9 @@ const app = {
             }
         }
 
-        const classFilter = classFilterEl.value;
+        const classFilter = classFilterEl?.value;
         const tbody = document.getElementById('table-students-body');
+        if (!tbody) return;
 
         if (!classFilter) {
             tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; color:#888;">Sila pilih kelas untuk melihat pelajar.</td></tr>';
@@ -368,12 +373,12 @@ const app = {
         else app.loadAdminStudents();
     },
 
-    // 3. Admin: Jenis Aktiviti
     loadAdminTypes: async () => {
         const { data, error } = await supabase.from('cocurricular_types').select('*').order('name');
         if (error) return app.toast(error.message, 'error');
         
         const tbody = document.getElementById('table-types-body');
+        if (!tbody) return;
         tbody.innerHTML = '';
         
         if (data) {
@@ -450,7 +455,6 @@ const app = {
             data.forEach(stu => {
                 const card = document.createElement('div');
                 card.className = 'student-card';
-                // Generate initial
                 const initial = stu.full_name ? stu.full_name.charAt(0).toUpperCase() : '?';
                 card.innerHTML = `
                     <div class="avatar">${initial}</div>
@@ -464,8 +468,6 @@ const app = {
 
         document.getElementById('teacher-student-list-container').classList.remove('hidden');
     },
-
-    // --- BUTIRAN PELAJAR & REKOD ---
 
     openStudentDetail: async (student) => {
         app.state.currentStudent = student;
@@ -519,13 +521,11 @@ const app = {
     },
 
     openEntryModal: async () => {
-        // Load types
         const { data } = await supabase.from('cocurricular_types').select('*').order('name');
         if (data) {
             app.populateDropdown('entry-type', data, 'id', 'name');
         }
         
-        // Set date to today
         document.getElementById('entry-date').valueAsDate = new Date();
         document.getElementById('entry-student-id').value = app.state.currentStudent.id;
         
@@ -566,13 +566,28 @@ const app = {
     // --- PEMBANTU UI (UI HELPERS) ---
 
     setupEventListeners: () => {
-        const loginForm = document.getElementById('login-form');
-        if (loginForm) loginForm.addEventListener('submit', app.handleLogin);
+        console.log("Menetapkan Event Listeners...");
         
-        document.getElementById('form-class').addEventListener('submit', app.handleClassSubmit);
-        document.getElementById('form-student').addEventListener('submit', app.handleStudentSubmit);
-        document.getElementById('form-type').addEventListener('submit', app.handleTypeSubmit);
-        document.getElementById('form-entry').addEventListener('submit', app.handleEntrySubmit);
+        const loginForm = document.getElementById('login-form');
+        if (loginForm) {
+            // Kita buang listener lama dahulu untuk elak double submit (safety)
+            loginForm.removeEventListener('submit', app.handleLogin);
+            loginForm.addEventListener('submit', app.handleLogin);
+        } else {
+            console.error("Login form tidak dijumpai di DOM");
+        }
+        
+        const formClass = document.getElementById('form-class');
+        if (formClass) formClass.addEventListener('submit', app.handleClassSubmit);
+
+        const formStudent = document.getElementById('form-student');
+        if (formStudent) formStudent.addEventListener('submit', app.handleStudentSubmit);
+
+        const formType = document.getElementById('form-type');
+        if (formType) formType.addEventListener('submit', app.handleTypeSubmit);
+
+        const formEntry = document.getElementById('form-entry');
+        if (formEntry) formEntry.addEventListener('submit', app.handleEntrySubmit);
     },
 
     populateDropdown: (elementId, data, valueKey, textKey, includePlaceholder = false) => {
