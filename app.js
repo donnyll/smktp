@@ -483,7 +483,6 @@ function populateAdminClassSelect() {
     adminClassSelect.appendChild(opt);
   });
 
-  // keep selection if possible
   if (state.adminSelectedClassId && state.adminClasses.some(c => c.id === state.adminSelectedClassId)) {
     adminClassSelect.value = state.adminSelectedClassId;
   } else {
@@ -828,7 +827,6 @@ signupForm.addEventListener("submit", async (e) => {
     toast("Signed up", "Teacher account created. You may need to confirm email (depending on Auth settings).", "ok", 4200);
     signupPanel.classList.add("hidden");
 
-    // If session exists immediately, route; else stay on login.
     const s = data.session;
     if (s) {
       state.session = s;
@@ -1218,7 +1216,6 @@ tblTeacherStudentsBody.addEventListener("click", async (e) => {
 
 backTeacherBtn.addEventListener("click", async () => {
   showView("teacher");
-  // refresh student list quickly (optional)
   await refreshAllTeacher();
 });
 
@@ -1248,16 +1245,6 @@ entryForm.addEventListener("submit", async (e) => {
     return;
   }
 
-  // Optional: disallow future date
-  const today = new Date();
-  today.setHours(0,0,0,0);
-  const d = new Date(activity_date + "T00:00:00");
-  if (d.getTime() > today.getTime()) {
-    toast("Validation", "Future dates are not allowed.", "warn");
-    entryDate.focus();
-    return;
-  }
-
   setLoading(true);
   try {
     await createEntry({
@@ -1265,7 +1252,7 @@ entryForm.addEventListener("submit", async (e) => {
       type_id,
       subject,
       activity_date,
-      created_by: state.user.id, // required by RLS policy
+      created_by: state.user.id,
     });
 
     toast("Saved", "Entry created.", "ok");
@@ -1322,15 +1309,6 @@ tblEntriesBody.addEventListener("click", async (e) => {
 
     if (!values) return;
 
-    // Future date block (optional)
-    const today = new Date();
-    today.setHours(0,0,0,0);
-    const d = new Date(values.activity_date + "T00:00:00");
-    if (d.getTime() > today.getTime()) {
-      toast("Validation", "Future dates are not allowed.", "warn");
-      return;
-    }
-
     setLoading(true);
     try {
       await updateEntry(id, {
@@ -1367,7 +1345,6 @@ tblEntriesBody.addEventListener("click", async (e) => {
 
 /* ========= INIT ========= */
 async function init() {
-  // If config not set, warn early
   if (SUPABASE_URL.includes("YOUR_") || SUPABASE_ANON_KEY.includes("YOUR_")) {
     toast("Setup needed", "Set SUPABASE_URL and SUPABASE_ANON_KEY in app.js", "warn", 6000);
   }
@@ -1392,7 +1369,6 @@ async function init() {
     setLoading(false);
   }
 
-  // Keep UI in sync on auth changes (token refresh, logout, etc.)
   sb.auth.onAuthStateChange(async (_event, session) => {
     state.session = session;
     state.user = session?.user || null;
