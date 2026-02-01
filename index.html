@@ -298,7 +298,6 @@
             <h1>Dashboard Guru</h1>
             <div class="muted">Rekod dan urus pencapaian murid.</div>
           </div>
-          <!-- Butang Eksport Guru dikeluarkan, gunakan di Admin untuk full report atau di detail murid -->
         </header>
 
         <div class="card">
@@ -403,11 +402,19 @@
               </div>
 
               <div class="field">
-                <label for="entry-teacher">Guru Pengiring / Penasihat</label>
-                <div class="select-wrapper">
-                  <select id="entry-teacher" required>
-                    <option value="">Pilih Guru...</option>
-                  </select>
+                <label>Guru Pengiring / Penasihat</label>
+                <!-- SEARCHABLE DROPDOWN STRUCTURE -->
+                <div class="custom-search-select" id="teacher-search-component">
+                  <div class="input-icon-wrapper">
+                    <i class="ph ph-magnifying-glass"></i>
+                    <input type="text" id="teacher-search-input" placeholder="Cari atau pilih guru..." autocomplete="off">
+                    <i class="ph ph-caret-down input-chevron"></i>
+                  </div>
+                  <input type="hidden" id="entry-teacher-id" required>
+                  
+                  <div id="teacher-search-dropdown" class="search-dropdown hidden">
+                    <!-- Options injected via JS -->
+                  </div>
                 </div>
               </div>
 

@@ -91,8 +91,12 @@ const entrySubject = $("#entry-subject");
 const entryDate = $("#entry-date");
 const entryType = $("#entry-type");
 const entryAchievement = $("#entry-achievement");
-const entryTeacher = $("#entry-teacher");
 const tblEntriesBody = $("#tbl-entries tbody");
+
+/* Searchable Teacher Elements */
+const teacherSearchInput = $("#teacher-search-input");
+const teacherSearchHiddenId = $("#entry-teacher-id");
+const teacherSearchDropdown = $("#teacher-search-dropdown");
 
 /* Export buttons */
 const btnExportAdmin = $("#btn-export-admin");
@@ -579,6 +583,78 @@ async function exportFullReportExcel() {
   }
 }
 
+/* ========= SEARCHABLE DROPDOWN LOGIC ========= */
+function initTeacherSearch() {
+  if(!teacherSearchInput) return;
+
+  function filterTeachers(query = "") {
+    const q = query.toLowerCase();
+    const matches = state.teachers.filter(t => t.full_name.toLowerCase().includes(q));
+    
+    teacherSearchDropdown.innerHTML = "";
+    if (matches.length === 0) {
+      const div = document.createElement("div");
+      div.className = "dropdown-item empty-msg";
+      div.textContent = "Tiada guru dijumpai.";
+      teacherSearchDropdown.appendChild(div);
+      return;
+    }
+
+    matches.forEach(t => {
+      const div = document.createElement("div");
+      div.className = "dropdown-item";
+      div.textContent = t.full_name;
+      div.onclick = () => {
+        selectTeacher(t.id, t.full_name);
+      };
+      teacherSearchDropdown.appendChild(div);
+    });
+  }
+
+  function selectTeacher(id, name) {
+    teacherSearchHiddenId.value = id;
+    teacherSearchInput.value = name;
+    teacherSearchDropdown.classList.add("hidden");
+  }
+
+  // Events
+  teacherSearchInput.addEventListener("focus", () => {
+    filterTeachers(teacherSearchInput.value); // Show filtering based on current text
+    teacherSearchDropdown.classList.remove("hidden");
+  });
+
+  teacherSearchInput.addEventListener("input", (e) => {
+    // Jika user clear input, clear juga ID
+    if(!e.target.value) teacherSearchHiddenId.value = "";
+    filterTeachers(e.target.value);
+    teacherSearchDropdown.classList.remove("hidden");
+  });
+
+  // Close when clicking outside
+  document.addEventListener("click", (e) => {
+    if (!e.target.closest("#teacher-search-component")) {
+      teacherSearchDropdown.classList.add("hidden");
+    }
+  });
+
+  // Pre-populate initially
+  filterTeachers("");
+}
+
+// Helper to reset and select
+function setTeacherSearchValue(id) {
+  if (!id) {
+    teacherSearchHiddenId.value = "";
+    teacherSearchInput.value = "";
+    return;
+  }
+  const teacher = state.teachers.find(t => t.id === id);
+  if (teacher) {
+    teacherSearchHiddenId.value = teacher.id;
+    teacherSearchInput.value = teacher.full_name;
+  }
+}
+
 /* ========= RENDERERS ========= */
 function populateGradeSelect(selectEl, selectedId) {
   selectEl.innerHTML = "";
@@ -603,15 +679,20 @@ function populateTypeSelect(selectEl, selectedId = "") {
 }
 
 function populateTeacherSelect(selectEl, selectedId = "") {
-  selectEl.innerHTML = `<option value="">Pilih Guru...</option>`;
-  state.teachers.forEach((t) => {
-    // Tunjuk semua dalam list
-    const opt = document.createElement("option");
-    opt.value = t.id;
-    opt.textContent = t.full_name;
-    selectEl.appendChild(opt);
-  });
-  if (selectedId) selectEl.value = selectedId;
+  // Ini untuk modal/admin yang masih guna select biasa
+  if(selectEl) {
+    selectEl.innerHTML = `<option value="">Pilih Guru...</option>`;
+    state.teachers.forEach((t) => {
+      const opt = document.createElement("option");
+      opt.value = t.id;
+      opt.textContent = t.full_name;
+      selectEl.appendChild(opt);
+    });
+    if (selectedId) selectEl.value = selectedId;
+  }
+
+  // Juga refresh data untuk search component
+  initTeacherSearch();
 }
 
 function gradeName(id) {
@@ -859,7 +940,7 @@ async function loadBootstrapData() {
   populateGradeSelect(teacherGradeSelect, state.teacherSelectedGrade);
   
   populateTypeSelect(entryType);
-  populateTeacherSelect(entryTeacher);
+  populateTeacherSelect(); // Ini akan init search juga
 
   renderTypesTable();
 }
@@ -906,14 +987,17 @@ async function openStudent(studentId) {
 
   // Reset form
   populateTypeSelect(entryType);
-  populateTeacherSelect(entryTeacher);
   entrySubject.value = "";
   entryDate.valueAsDate = new Date();
   entryAchievement.value = "Penyertaan";
   
+  // Reset Search Guru
+  setTeacherSearchValue(null);
+
   // Set default guru pengiring kepada current user jika dia guru
-  if(state.teachers.find(t => t.id === state.user.id)) {
-      entryTeacher.value = state.user.id;
+  const currentUserIsTeacher = state.teachers.find(t => t.id === state.user.id);
+  if(currentUserIsTeacher) {
+      setTeacherSearchValue(state.user.id);
   }
 
   state.studentEntries = await fetchEntriesByStudent(studentId);
@@ -1529,7 +1613,8 @@ entryForm.addEventListener("submit", async (e) => {
   const activity_date = entryDate.value;
   const type_id = entryType.value;
   const achievement = entryAchievement.value;
-  const teacher_id = entryTeacher.value;
+  // UPDATE: Ambil value dari hidden ID, bukan select
+  const teacher_id = teacherSearchHiddenId.value;
 
   if (!subject || subject.length < 3) {
     toast("Validasi", "Aktiviti diperlukan (min 3 aksara).", "warn");
@@ -1548,7 +1633,7 @@ entryForm.addEventListener("submit", async (e) => {
   }
   if (!teacher_id) {
     toast("Validasi", "Sila pilih Guru Pengiring.", "warn");
-    entryTeacher.focus();
+    teacherSearchInput.focus();
     return;
   }
 
@@ -1604,7 +1689,7 @@ tblEntriesBody.addEventListener("click", async (e) => {
             {value:"Keempat", label:"Keempat (No. 4)"},
             {value:"Kelima", label:"Kelima (No. 5)"},
         ]},
-        // Untuk Edit Guru Pengiring, kita perlu list guru. Oleh kerana modal helper simple, kita inject options manual
+        // Untuk Modal, kita kekalkan select biasa untuk simplicity
         { name: "teacher_advisor_id", label: "Guru Pengiring", type: "select", required:true, options: state.teachers.map(t => ({value:t.id, label:t.full_name})) }
       ],
       initial: {
