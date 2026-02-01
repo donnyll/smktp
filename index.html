@@ -1,203 +1,302 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Co-Curricular AMS</title>
-    <link rel="stylesheet" href="styles.css">
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Co-Curricular Achievement Management</title>
+  <link rel="stylesheet" href="styles.css" />
 </head>
-<body class="bg-gray-50 text-gray-900 font-sans">
-    
-    <!-- Navigation Sidebar -->
-    <nav id="sidebar" class="hidden fixed left-0 top-0 h-full w-64 bg-slate-800 text-white p-6 flex-col">
-        <h1 class="text-xl font-bold mb-8 border-b border-slate-700 pb-4">School AMS</h1>
-        
-        <div class="flex-grow space-y-2">
-            <button onclick="router.navigate('teacher')" id="nav-teacher" class="nav-btn w-full text-left px-4 py-2 rounded transition-colors hover:bg-slate-700">Teacher Portal</button>
-            <button onclick="router.navigate('admin')" id="nav-admin" class="nav-btn hidden w-full text-left px-4 py-2 rounded transition-colors hover:bg-slate-700">Admin Dashboard</button>
+<body>
+  <div id="app">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-title">Co-Curricular</div>
+        <div class="brand-sub">Achievement System</div>
+      </div>
+
+      <div id="user-badge" class="user-badge hidden">
+        <div id="user-email" class="user-email"></div>
+        <div id="user-role" class="pill"></div>
+      </div>
+
+      <nav class="nav">
+        <button id="nav-login" class="nav-btn" data-nav="login">Login</button>
+        <button id="nav-admin" class="nav-btn requires-auth hidden" data-nav="admin">Admin</button>
+        <button id="nav-teacher" class="nav-btn requires-auth hidden" data-nav="teacher">Teacher</button>
+      </nav>
+
+      <div class="sidebar-footer">
+        <button id="btn-logout" class="btn danger requires-auth hidden">Logout</button>
+        <div class="hint">
+          Static SPA (Vercel-ready)<br/>
+          Supabase Auth + RLS
+        </div>
+      </div>
+    </aside>
+
+    <main class="main">
+      <div id="unauthorized" class="alert hidden"></div>
+
+      <!-- LOGIN VIEW -->
+      <section id="view-login" class="view">
+        <h1>Sign in</h1>
+        <p class="muted">Use your teacher/admin account to access the system.</p>
+
+        <div class="card">
+          <form id="form-login" class="form">
+            <div class="field">
+              <label for="login-email">Email</label>
+              <input id="login-email" type="email" autocomplete="email" required placeholder="teacher@school.com" />
+            </div>
+
+            <div class="field">
+              <label for="login-password">Password</label>
+              <input id="login-password" type="password" autocomplete="current-password" required placeholder="••••••••" />
+            </div>
+
+            <div class="row">
+              <button class="btn primary" type="submit">Login</button>
+              <button class="btn secondary" type="button" id="btn-go-signup">Create teacher</button>
+            </div>
+
+            <div class="muted small">
+              Admin access is enforced by <b>database RLS</b> (not just UI).
+            </div>
+          </form>
         </div>
 
-        <div class="pt-4 border-t border-slate-700">
-            <div id="user-display" class="text-sm text-slate-400 mb-2 truncate"></div>
-            <button onclick="auth.logout()" class="w-full bg-red-600 hover:bg-red-700 text-white py-2 rounded transition-colors">Logout</button>
+        <div id="signup-panel" class="card hidden">
+          <h2>Create Teacher Account</h2>
+          <p class="muted small">
+            This creates a teacher user (default role: teacher). To create an admin, promote the user in Supabase SQL Editor.
+          </p>
+
+          <form id="form-signup" class="form">
+            <div class="field">
+              <label for="signup-email">Email</label>
+              <input id="signup-email" type="email" autocomplete="email" required placeholder="newteacher@school.com" />
+            </div>
+
+            <div class="field">
+              <label for="signup-password">Password</label>
+              <input id="signup-password" type="password" autocomplete="new-password" required minlength="6" placeholder="min 6 chars" />
+            </div>
+
+            <div class="row">
+              <button class="btn primary" type="submit">Sign up</button>
+              <button class="btn secondary" type="button" id="btn-cancel-signup">Cancel</button>
+            </div>
+          </form>
         </div>
-    </nav>
+      </section>
 
-    <!-- Main Content Area -->
-    <main id="main-content" class="ml-0 p-8 transition-all duration-300">
-        
-        <!-- Loading Overlay -->
-        <div id="loading" class="fixed inset-0 bg-white/80 flex items-center justify-center z-50 hidden">
-            <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+      <!-- ADMIN VIEW -->
+      <section id="view-admin" class="view hidden">
+        <div class="view-header">
+          <h1>Admin Console</h1>
+          <div class="muted">Manage Classes, Students, and Co-curricular Types.</div>
         </div>
 
-        <!-- Notification Toast -->
-        <div id="toast" class="fixed top-4 right-4 p-4 rounded shadow-lg hidden transition-all duration-300 z-[100]"></div>
-
-        <!-- 1. Login View -->
-        <section id="view-login" class="max-w-md mx-auto mt-20 bg-white p-8 rounded-xl shadow-md hidden">
-            <h2 class="text-2xl font-bold mb-6 text-center">System Login</h2>
-            <form id="form-login" class="space-y-4">
-                <div>
-                    <label class="block text-sm font-medium mb-1">Email</label>
-                    <input type="email" id="login-email" required class="w-full p-2 border rounded focus:ring-2 focus:ring-indigo-500 outline-none">
+        <div class="grid-2">
+          <!-- Classes -->
+          <div class="card">
+            <div class="card-header">
+              <h2>Class Management</h2>
+              <div class="row wrap">
+                <div class="field-inline">
+                  <label for="admin-grade-select">Grade</label>
+                  <select id="admin-grade-select"></select>
                 </div>
-                <div>
-                    <label class="block text-sm font-medium mb-1">Password</label>
-                    <input type="password" id="login-password" required class="w-full p-2 border rounded focus:ring-2 focus:ring-indigo-500 outline-none">
-                </div>
-                <button type="submit" class="w-full bg-indigo-600 text-white py-2 rounded hover:bg-indigo-700 transition">Sign In</button>
-            </form>
-            <div class="mt-4 text-center">
-                <button onclick="auth.toggleSignup()" class="text-sm text-indigo-600 hover:underline">Register as Teacher</button>
-            </div>
-        </section>
-
-        <!-- 2. Registration View -->
-        <section id="view-signup" class="max-w-md mx-auto mt-20 bg-white p-8 rounded-xl shadow-md hidden">
-            <h2 class="text-2xl font-bold mb-6 text-center">Teacher Registration</h2>
-            <form id="form-signup" class="space-y-4">
-                <div>
-                    <label class="block text-sm font-medium mb-1">Full Name</label>
-                    <input type="text" id="signup-name" required class="w-full p-2 border rounded focus:ring-2 focus:ring-indigo-500 outline-none">
-                </div>
-                <div>
-                    <label class="block text-sm font-medium mb-1">Email</label>
-                    <input type="email" id="signup-email" required class="w-full p-2 border rounded focus:ring-2 focus:ring-indigo-500 outline-none">
-                </div>
-                <div>
-                    <label class="block text-sm font-medium mb-1">Password</label>
-                    <input type="password" id="signup-password" required minlength="6" class="w-full p-2 border rounded focus:ring-2 focus:ring-indigo-500 outline-none">
-                </div>
-                <button type="submit" class="w-full bg-green-600 text-white py-2 rounded hover:bg-green-700 transition">Create Account</button>
-            </form>
-            <div class="mt-4 text-center">
-                <button onclick="auth.toggleSignup()" class="text-sm text-indigo-600 hover:underline">Back to Login</button>
-            </div>
-        </section>
-
-        <!-- 3. Admin View -->
-        <section id="view-admin" class="hidden space-y-8 max-w-6xl mx-auto">
-            <header class="flex justify-between items-center border-b pb-4">
-                <h2 class="text-3xl font-bold text-slate-800">Administrator Console</h2>
-            </header>
-
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <!-- Class Management -->
-                <div class="bg-white p-6 rounded-lg shadow col-span-1">
-                    <h3 class="font-bold text-lg mb-4">Classes</h3>
-                    <div class="flex gap-2 mb-4">
-                        <select id="admin-grade-filter" class="p-2 border rounded text-sm bg-gray-50 flex-grow"></select>
-                        <button onclick="admin.openClassModal()" class="bg-indigo-600 text-white px-3 rounded">+</button>
-                    </div>
-                    <ul id="admin-class-list" class="divide-y max-h-96 overflow-y-auto"></ul>
-                </div>
-
-                <!-- Student Management -->
-                <div class="bg-white p-6 rounded-lg shadow col-span-2">
-                    <div class="flex justify-between items-center mb-4">
-                        <h3 class="font-bold text-lg">Students in <span id="admin-active-class-name">-</span></h3>
-                        <button id="btn-add-student" onclick="admin.openStudentModal()" disabled class="bg-indigo-600 text-white px-4 py-1 rounded text-sm disabled:opacity-50">Add Student</button>
-                    </div>
-                    <div class="overflow-x-auto">
-                        <table class="w-full text-sm">
-                            <thead>
-                                <tr class="bg-gray-50 text-left">
-                                    <th class="p-3">ID No</th>
-                                    <th class="p-3">Full Name</th>
-                                    <th class="p-3 text-right">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody id="admin-student-table" class="divide-y"></tbody>
-                        </table>
-                    </div>
-                </div>
+                <button id="btn-class-create" class="btn primary">+ New Class</button>
+              </div>
             </div>
 
-            <!-- Co-curricular Types -->
-            <div class="bg-white p-6 rounded-lg shadow">
-                <div class="flex justify-between items-center mb-4">
-                    <h3 class="font-bold text-lg">Activity Categories</h3>
-                    <button onclick="admin.openTypeModal()" class="bg-indigo-600 text-white px-4 py-1 rounded text-sm">Add Category</button>
-                </div>
-                <div id="admin-type-list" class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3"></div>
+            <table class="table" id="tbl-classes">
+              <thead>
+                <tr>
+                  <th>Class</th>
+                  <th>Grade</th>
+                  <th class="right">Actions</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+
+            <div class="muted small">
+              Tip: Deleting a class will also delete its students and their entries (cascade).
             </div>
-        </section>
+          </div>
 
-        <!-- 4. Teacher View -->
-        <section id="view-teacher" class="hidden space-y-6 max-w-6xl mx-auto">
-            <h2 class="text-3xl font-bold text-slate-800">Teacher Portal</h2>
-            
-            <div class="bg-white p-6 rounded-lg shadow flex flex-wrap gap-4 items-end">
-                <div class="flex-grow min-w-[200px]">
-                    <label class="block text-sm font-medium mb-1">Select Form</label>
-                    <select id="teacher-grade-select" class="w-full p-2 border rounded"></select>
+          <!-- Students -->
+          <div class="card">
+            <div class="card-header">
+              <h2>Student Management</h2>
+              <div class="row wrap">
+                <div class="field-inline">
+                  <label for="admin-class-select">Class</label>
+                  <select id="admin-class-select"></select>
                 </div>
-                <div class="flex-grow min-w-[200px]">
-                    <label class="block text-sm font-medium mb-1">Select Class</label>
-                    <select id="teacher-class-select" class="w-full p-2 border rounded"></select>
-                </div>
-                <button onclick="teacher.loadStudents()" class="bg-indigo-600 text-white px-6 py-2 rounded hover:bg-indigo-700">Find Students</button>
+                <button id="btn-student-create" class="btn primary">+ New Student</button>
+              </div>
             </div>
 
-            <div id="teacher-student-container" class="hidden grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
-        </section>
+            <table class="table" id="tbl-students">
+              <thead>
+                <tr>
+                  <th>Student</th>
+                  <th>Student No</th>
+                  <th class="right">Actions</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
 
-        <!-- 5. Student Detail / History View -->
-        <section id="view-student-detail" class="hidden space-y-6 max-w-5xl mx-auto">
-            <button onclick="teacher.backToMain()" class="text-indigo-600 hover:underline mb-2">&larr; Back to Class List</button>
-            
-            <div class="bg-white p-8 rounded-xl shadow-lg">
-                <div class="flex justify-between items-start mb-8">
-                    <div>
-                        <h2 id="detail-student-name" class="text-3xl font-bold">Student Name</h2>
-                        <p id="detail-student-meta" class="text-slate-500">Form 1 - Class Alpha</p>
-                    </div>
-                    <button onclick="teacher.openEntryModal()" class="bg-indigo-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-indigo-700">Add Achievement</button>
-                </div>
-
-                <div class="border-t pt-6">
-                    <h3 class="text-lg font-bold mb-4">Achievement History</h3>
-                    <div class="overflow-x-auto">
-                        <table class="w-full border-collapse">
-                            <thead>
-                                <tr class="bg-gray-50 border-b text-left text-xs uppercase tracking-wider text-gray-500">
-                                    <th class="p-3">Date</th>
-                                    <th class="p-3">Category</th>
-                                    <th class="p-3">Subject / Description</th>
-                                    <th class="p-3 text-right">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody id="history-table-body" class="divide-y text-sm"></tbody>
-                        </table>
-                    </div>
-                </div>
+        <!-- Types -->
+        <div class="card">
+          <div class="card-header">
+            <h2>Co-curricular Types</h2>
+            <div class="row">
+              <button id="btn-type-create" class="btn primary">+ New Type</button>
             </div>
-        </section>
+          </div>
 
-        <!-- 6. Unauthorized View -->
-        <section id="view-unauthorized" class="hidden text-center mt-20">
-            <div class="text-red-500 text-6xl mb-4">⚠️</div>
-            <h2 class="text-2xl font-bold">Access Denied</h2>
-            <p class="text-gray-600 mt-2">You do not have administrative privileges to view this page.</p>
-            <button onclick="router.navigate('teacher')" class="mt-4 bg-indigo-600 text-white px-4 py-2 rounded">Back to Portal</button>
-        </section>
+          <table class="table" id="tbl-types">
+            <thead>
+              <tr>
+                <th>Type Name</th>
+                <th class="right">Actions</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
 
+          <div class="muted small">
+            Deleting a type may fail if entries already reference it (restricted).
+          </div>
+        </div>
+      </section>
+
+      <!-- TEACHER VIEW -->
+      <section id="view-teacher" class="view hidden">
+        <div class="view-header">
+          <h1>Teacher</h1>
+          <div class="muted">Select grade → class → student, then record achievements.</div>
+        </div>
+
+        <div class="card">
+          <div class="row wrap">
+            <div class="field-inline">
+              <label for="teacher-grade-select">Grade</label>
+              <select id="teacher-grade-select"></select>
+            </div>
+
+            <div class="field-inline">
+              <label for="teacher-class-select">Class</label>
+              <select id="teacher-class-select" disabled></select>
+            </div>
+
+            <div class="field-inline grow">
+              <label for="student-search">Search</label>
+              <input id="student-search" type="text" placeholder="Type student name..." />
+            </div>
+          </div>
+
+          <table class="table" id="tbl-teacher-students">
+            <thead>
+              <tr>
+                <th>Student</th>
+                <th>Student No</th>
+                <th class="right">Open</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- STUDENT DETAIL VIEW -->
+      <section id="view-student-detail" class="view hidden">
+        <div class="row space-between align-center">
+          <div>
+            <h1 id="student-detail-title">Student</h1>
+            <div id="student-detail-sub" class="muted"></div>
+          </div>
+          <button id="btn-back-teacher" class="btn secondary">← Back</button>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <h2>Add Co-Curricular Entry</h2>
+            <div class="muted small">Subject min 3 chars • Date required • Type required • (Optional) future dates blocked</div>
+          </div>
+
+          <form id="form-entry" class="form">
+            <div class="grid-3">
+              <div class="field">
+                <label for="entry-subject">Subject</label>
+                <input id="entry-subject" type="text" minlength="3" required placeholder="e.g., Badminton Training" />
+              </div>
+              <div class="field">
+                <label for="entry-date">Activity Date</label>
+                <input id="entry-date" type="date" required />
+              </div>
+              <div class="field">
+                <label for="entry-type">Type</label>
+                <select id="entry-type" required></select>
+              </div>
+            </div>
+            <div class="row">
+              <button class="btn primary" type="submit">Save Entry</button>
+            </div>
+          </form>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <h2>History</h2>
+          </div>
+
+          <table class="table" id="tbl-entries">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Type</th>
+                <th>Subject</th>
+                <th>Created</th>
+                <th class="right">Actions</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </section>
     </main>
+  </div>
 
-    <!-- Generic Modals -->
-    <div id="modal-container" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-[200]">
-        <div class="bg-white p-8 rounded-lg shadow-2xl max-w-lg w-full m-4">
-            <h2 id="modal-title" class="text-xl font-bold mb-4">Modal Title</h2>
-            <div id="modal-content"></div>
-            <div class="mt-6 flex justify-end gap-3">
-                <button onclick="ui.closeModal()" class="px-4 py-2 text-gray-600 hover:text-gray-900 font-medium">Cancel</button>
-                <button id="modal-submit" class="px-6 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 font-medium">Save Changes</button>
-            </div>
-        </div>
+  <!-- Toasts + loading -->
+  <div id="toast-container"></div>
+  <div id="loading-overlay" class="hidden">
+    <div class="loading-card">
+      <div class="spinner"></div>
+      <div>Loading…</div>
     </div>
+  </div>
 
-    <script src="app.js"></script>
+  <!-- Modal (dialog) -->
+  <dialog id="modal">
+    <form id="modal-form" method="dialog">
+      <h3 id="modal-title"></h3>
+      <div id="modal-body" class="modal-body"></div>
+      <div class="row right">
+        <button type="button" id="modal-cancel" class="btn secondary">Cancel</button>
+        <button type="submit" id="modal-submit" class="btn primary">Save</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="app.js"></script>
 </body>
 </html>

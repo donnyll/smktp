@@ -1,558 +1,1421 @@
-/**
- * KONFIGURASI SUPABASE
- * Menggunakan credentials yang anda berikan.
- */
+/* ========= CONFIG =========
+   1) Create Supabase project
+   2) Run schema.sql in Supabase SQL Editor
+   3) Put your URL + anon key below
+*/
 const SUPABASE_URL = "https://dflpaypdadctuhrcmavq.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRmbHBheXBkYWRjdHVocmNtYXZxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk5MTcwMTcsImV4cCI6MjA4NTQ5MzAxN30.YZVfciWmp7s0NofEtjGayb175RT1lZsLVoMuzZDjfdc";
 
-const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-// --- APP STATE ---
+/* ========= STATE ========= */
 const state = {
-    user: null,
-    profile: null,
-    activeView: 'login',
-    admin: {
-        activeGrade: 1,
-        activeClass: null,
-        classes: [],
-        students: [],
-        types: []
-    },
-    teacher: {
-        activeGrade: 1,
-        activeClass: null,
-        activeStudent: null,
-        students: [],
-        history: []
-    }
+  session: null,
+  user: null,
+  profile: null,
+  role: null,
+
+  gradeLevels: [],
+  types: [],
+
+  // Admin
+  adminSelectedGrade: 1,
+  adminClasses: [],
+  adminSelectedClassId: null,
+  adminStudents: [],
+
+  // Teacher
+  teacherSelectedGrade: 1,
+  teacherClasses: [],
+  teacherSelectedClassId: null,
+  teacherStudents: [],
+  selectedStudent: null,
+  studentEntries: [],
 };
 
-// --- ROUTING ---
-const router = {
-    views: ['login', 'signup', 'admin', 'teacher', 'student-detail', 'unauthorized'],
-    
-    async navigate(viewId, params = {}) {
-        // Auth Guards
-        if (viewId === 'admin' && state.profile?.role !== 'admin') {
-            viewId = 'unauthorized';
-        }
+/* ========= DOM ========= */
+const $ = (sel) => document.querySelector(sel);
 
-        this.views.forEach(v => {
-            const el = document.getElementById(`view-${v}`);
-            if (el) el.classList.add('hidden');
-        });
-
-        const target = document.getElementById(`view-${viewId}`);
-        if (target) target.classList.remove('hidden');
-        
-        state.activeView = viewId;
-        
-        // Navigation visual update
-        document.querySelectorAll('.nav-btn').forEach(btn => {
-            btn.classList.remove('active');
-            if (btn.id === `nav-${viewId}`) btn.classList.add('active');
-        });
-
-        // Lifecycle Hooks
-        if (viewId === 'admin') await admin.init();
-        if (viewId === 'teacher') await teacher.init();
-    }
+const views = {
+  login: $("#view-login"),
+  admin: $("#view-admin"),
+  teacher: $("#view-teacher"),
+  student: $("#view-student-detail"),
 };
 
-// --- AUTH MODULE ---
-const auth = {
-    async init() {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session) {
-            await this.handleLoginSuccess(session.user);
-        } else {
-            router.navigate('login');
-        }
+const unauthorizedEl = $("#unauthorized");
+const loadingOverlay = $("#loading-overlay");
+const toastContainer = $("#toast-container");
 
-        // Listen for auth changes
-        supabase.auth.onAuthStateChange(async (event, session) => {
-            if (event === 'SIGNED_IN' && session) {
-                await this.handleLoginSuccess(session.user);
-            } else if (event === 'SIGNED_OUT') {
-                state.user = null;
-                state.profile = null;
-                ui.toggleSidebar(false);
-                router.navigate('login');
-            }
-        });
-    },
+const navLogin = $("#nav-login");
+const navAdmin = $("#nav-admin");
+const navTeacher = $("#nav-teacher");
+const logoutBtn = $("#btn-logout");
 
-    async handleLoginSuccess(user) {
-        state.user = user;
-        const { data: profile, error } = await supabase
-            .from('profiles')
-            .select('*')
-            .eq('id', user.id)
-            .single();
-        
-        if (error) {
-            console.error("Profile error:", error);
-            return;
-        }
+const userBadge = $("#user-badge");
+const userEmail = $("#user-email");
+const userRole = $("#user-role");
 
-        state.profile = profile;
-        document.getElementById('user-display').innerText = `${profile.full_name} (${profile.role})`;
-        
-        ui.toggleSidebar(true);
-        if (profile.role === 'admin') {
-            document.getElementById('nav-admin').classList.remove('hidden');
-            router.navigate('admin');
-        } else {
-            document.getElementById('nav-admin').classList.add('hidden');
-            router.navigate('teacher');
-        }
-    },
+const loginForm = $("#form-login");
+const signupPanel = $("#signup-panel");
+const goSignupBtn = $("#btn-go-signup");
+const cancelSignupBtn = $("#btn-cancel-signup");
+const signupForm = $("#form-signup");
 
-    async login(email, password) {
-        ui.setLoading(true);
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
-        ui.setLoading(false);
-        if (error) ui.notify(error.message, 'error');
-    },
+const adminGradeSelect = $("#admin-grade-select");
+const adminClassSelect = $("#admin-class-select");
+const btnClassCreate = $("#btn-class-create");
+const btnStudentCreate = $("#btn-student-create");
+const btnTypeCreate = $("#btn-type-create");
 
-    async signup(email, password, fullName) {
-        ui.setLoading(true);
-        const { error } = await supabase.auth.signUp({
-            email,
-            password,
-            options: { data: { full_name: fullName } }
-        });
-        ui.setLoading(false);
-        if (error) ui.notify(error.message, 'error');
-        else ui.notify("Registration successful! You can now login.", 'success');
-    },
+const tblClassesBody = $("#tbl-classes tbody");
+const tblStudentsBody = $("#tbl-students tbody");
+const tblTypesBody = $("#tbl-types tbody");
 
-    async logout() {
-        await supabase.auth.signOut();
-    },
+const teacherGradeSelect = $("#teacher-grade-select");
+const teacherClassSelect = $("#teacher-class-select");
+const studentSearch = $("#student-search");
+const tblTeacherStudentsBody = $("#tbl-teacher-students tbody");
 
-    toggleSignup() {
-        const current = state.activeView;
-        router.navigate(current === 'login' ? 'signup' : 'login');
+const studentTitle = $("#student-detail-title");
+const studentSub = $("#student-detail-sub");
+const backTeacherBtn = $("#btn-back-teacher");
+const entryForm = $("#form-entry");
+const entrySubject = $("#entry-subject");
+const entryDate = $("#entry-date");
+const entryType = $("#entry-type");
+const tblEntriesBody = $("#tbl-entries tbody");
+
+/* Modal */
+const modal = $("#modal");
+const modalForm = $("#modal-form");
+const modalTitle = $("#modal-title");
+const modalBody = $("#modal-body");
+const modalCancel = $("#modal-cancel");
+const modalSubmit = $("#modal-submit");
+
+let modalResolver = null;
+let modalFieldDefs = [];
+
+/* ========= UI HELPERS ========= */
+function setLoading(on) {
+  loadingOverlay.classList.toggle("hidden", !on);
+}
+
+function toast(title, msg, type = "ok", ttl = 2800) {
+  const el = document.createElement("div");
+  el.className = `toast ${type}`;
+  el.innerHTML = `
+    <div class="title">${escapeHtml(title)}</div>
+    <div class="msg">${escapeHtml(msg || "")}</div>
+  `;
+  toastContainer.appendChild(el);
+  setTimeout(() => {
+    el.style.opacity = "0";
+    el.style.transform = "translateY(-6px)";
+    setTimeout(() => el.remove(), 200);
+  }, ttl);
+}
+
+function showUnauthorized(message) {
+  unauthorizedEl.textContent = message;
+  unauthorizedEl.classList.remove("hidden");
+}
+
+function clearUnauthorized() {
+  unauthorizedEl.classList.add("hidden");
+  unauthorizedEl.textContent = "";
+}
+
+function setActiveNav(key) {
+  [navLogin, navAdmin, navTeacher].forEach((b) => b.classList.remove("active"));
+  if (key === "login") navLogin.classList.add("active");
+  if (key === "admin") navAdmin.classList.add("active");
+  if (key === "teacher") navTeacher.classList.add("active");
+}
+
+function showView(key) {
+  Object.values(views).forEach((v) => v.classList.add("hidden"));
+  clearUnauthorized();
+
+  if (key === "login") {
+    views.login.classList.remove("hidden");
+    setActiveNav("login");
+    return;
+  }
+
+  if (!state.user) {
+    views.login.classList.remove("hidden");
+    setActiveNav("login");
+    return;
+  }
+
+  if (key === "admin") {
+    if (state.role !== "admin") {
+      showUnauthorized("Unauthorized: Admin console is only accessible to admin users.");
+      toast("Unauthorized", "You don't have permission to access Admin.", "warn");
+      views.teacher.classList.remove("hidden");
+      setActiveNav("teacher");
+      return;
     }
-};
+    views.admin.classList.remove("hidden");
+    setActiveNav("admin");
+    return;
+  }
 
-// --- ADMIN MODULE ---
-const admin = {
-    async init() {
-        ui.setLoading(true);
-        await this.loadInitialData();
-        this.renderGrades();
-        await this.loadClasses();
-        await this.loadTypes();
-        ui.setLoading(false);
-    },
+  if (key === "teacher") {
+    views.teacher.classList.remove("hidden");
+    setActiveNav("teacher");
+    return;
+  }
 
-    async loadInitialData() {
-        const { data: grades } = await supabase.from('grade_levels').select('*').order('id');
-        this.grades = grades || [];
-    },
+  if (key === "student") {
+    views.student.classList.remove("hidden");
+    setActiveNav("teacher");
+    return;
+  }
+}
 
-    renderGrades() {
-        const select = document.getElementById('admin-grade-filter');
-        select.innerHTML = this.grades.map(g => `<option value="${g.id}">Form ${g.id}</option>`).join('');
-        select.value = state.admin.activeGrade;
-        select.onchange = (e) => {
-            state.admin.activeGrade = parseInt(e.target.value);
-            this.loadClasses();
-        };
-    },
+function escapeHtml(str) {
+  return String(str ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
 
-    async loadClasses() {
-        const { data, error } = await supabase
-            .from('classes')
-            .select('*')
-            .eq('grade_level_id', state.admin.activeGrade)
-            .order('name');
-        
-        state.admin.classes = data || [];
-        this.renderClasses();
-    },
+/* ========= MODAL ========= */
+function openModal({ title, submitText = "Save", fields = [], initial = {} }) {
+  modalTitle.textContent = title;
+  modalSubmit.textContent = submitText;
+  modalBody.innerHTML = "";
+  modalFieldDefs = fields;
 
-    renderClasses() {
-        const list = document.getElementById('admin-class-list');
-        list.innerHTML = state.admin.classes.map(c => `
-            <li class="p-3 flex justify-between items-center group cursor-pointer hover:bg-indigo-50 ${state.admin.activeClass?.id === c.id ? 'bg-indigo-50 border-r-4 border-indigo-600' : ''}" 
-                onclick="admin.selectClass('${c.id}')">
-                <span class="font-medium text-slate-700">${c.name}</span>
-                <div class="hidden group-hover:flex gap-2">
-                    <button onclick="event.stopPropagation(); admin.openClassModal('${c.id}')" class="text-xs text-blue-600 hover:underline">Edit</button>
-                    <button onclick="event.stopPropagation(); admin.deleteClass('${c.id}')" class="text-xs text-red-600 hover:underline">Del</button>
-                </div>
-            </li>
-        `).join('') || '<p class="p-4 text-xs text-gray-400">No classes found.</p>';
-    },
+  fields.forEach((f) => {
+    const wrap = document.createElement("div");
+    wrap.className = "field";
+    const id = `modal_${f.name}`;
 
-    async selectClass(classId) {
-        state.admin.activeClass = state.admin.classes.find(c => c.id === classId);
-        document.getElementById('admin-active-class-name').innerText = state.admin.activeClass.name;
-        document.getElementById('btn-add-student').disabled = false;
-        this.renderClasses(); // Refresh to show highlight
-        this.loadStudents();
-    },
+    const label = document.createElement("label");
+    label.setAttribute("for", id);
+    label.textContent = f.label;
 
-    async loadStudents() {
-        if (!state.admin.activeClass) return;
-        const { data } = await supabase
-            .from('students')
-            .select('*')
-            .eq('class_id', state.admin.activeClass.id)
-            .order('full_name');
-        
-        state.admin.students = data || [];
-        this.renderStudents();
-    },
-
-    renderStudents() {
-        const tbody = document.getElementById('admin-student-table');
-        tbody.innerHTML = state.admin.students.map(s => `
-            <tr>
-                <td class="p-3 font-mono text-slate-500">${s.student_no || '-'}</td>
-                <td class="p-3 font-semibold">${s.full_name}</td>
-                <td class="p-3 text-right">
-                    <button onclick="admin.openStudentModal('${s.id}')" class="text-blue-600 mr-3">Edit</button>
-                    <button onclick="admin.deleteStudent('${s.id}')" class="text-red-600">Delete</button>
-                </td>
-            </tr>
-        `).join('') || '<tr><td colspan="3" class="p-8 text-center text-gray-400">No students enrolled.</td></tr>';
-    },
-
-    async loadTypes() {
-        const { data } = await supabase.from('cocurricular_types').select('*').order('name');
-        state.admin.types = data || [];
-        this.renderTypes();
-    },
-
-    renderTypes() {
-        const container = document.getElementById('admin-type-list');
-        container.innerHTML = state.admin.types.map(t => `
-            <div class="bg-gray-100 p-2 rounded text-xs flex justify-between items-center group">
-                <span class="truncate pr-2">${t.name}</span>
-                <button onclick="admin.deleteType('${t.id}')" class="hidden group-hover:block text-red-500 font-bold">×</button>
-            </div>
-        `).join('') || '<p class="text-gray-400 italic text-sm">No types defined.</p>';
-    },
-
-    // --- Modals & CRUD ---
-    openClassModal(id = null) {
-        const existing = id ? state.admin.classes.find(c => c.id === id) : null;
-        ui.showModal(
-            existing ? 'Edit Class' : 'Create Class',
-            `<div class="space-y-4">
-                <label class="block text-sm">Class Name (e.g. 1 Alpha)</label>
-                <input type="text" id="modal-field-1" value="${existing?.name || ''}" class="w-full p-2 border rounded">
-            </div>`,
-            async () => {
-                const name = document.getElementById('modal-field-1').value;
-                if (!name) return;
-                const payload = { name, grade_level_id: state.admin.activeGrade };
-                const req = id 
-                    ? supabase.from('classes').update(payload).eq('id', id)
-                    : supabase.from('classes').insert(payload);
-                const { error } = await req;
-                if (!error) { ui.closeModal(); this.loadClasses(); }
-                else ui.notify(error.message, 'error');
-            }
-        );
-    },
-
-    async deleteClass(id) {
-        if (!confirm("Delete class and all its student records?")) return;
-        const { error } = await supabase.from('classes').delete().eq('id', id);
-        if (!error) {
-            if (state.admin.activeClass?.id === id) state.admin.activeClass = null;
-            this.loadClasses();
-        }
-    },
-
-    openStudentModal(id = null) {
-        const existing = id ? state.admin.students.find(s => s.id === id) : null;
-        ui.showModal(
-            existing ? 'Edit Student' : 'Enroll Student',
-            `<div class="space-y-4">
-                <div>
-                    <label class="block text-sm mb-1">Full Name</label>
-                    <input type="text" id="modal-field-1" value="${existing?.full_name || ''}" class="w-full p-2 border rounded">
-                </div>
-                <div>
-                    <label class="block text-sm mb-1">Student No (Optional)</label>
-                    <input type="text" id="modal-field-2" value="${existing?.student_no || ''}" class="w-full p-2 border rounded">
-                </div>
-            </div>`,
-            async () => {
-                const full_name = document.getElementById('modal-field-1').value;
-                const student_no = document.getElementById('modal-field-2').value;
-                if (!full_name) return;
-                const payload = { full_name, student_no: student_no || null, class_id: state.admin.activeClass.id };
-                const req = id 
-                    ? supabase.from('students').update(payload).eq('id', id)
-                    : supabase.from('students').insert(payload);
-                const { error } = await req;
-                if (!error) { ui.closeModal(); this.loadStudents(); }
-                else ui.notify(error.message, 'error');
-            }
-        );
-    },
-
-    async deleteStudent(id) {
-        if (!confirm("Are you sure? All co-curricular history will be deleted.")) return;
-        const { error } = await supabase.from('students').delete().eq('id', id);
-        if (!error) this.loadStudents();
-    },
-
-    openTypeModal() {
-        ui.showModal('New Category', 
-            `<input type="text" id="modal-field-1" placeholder="e.g. Football, Debating" class="w-full p-2 border rounded">`,
-            async () => {
-                const name = document.getElementById('modal-field-1').value;
-                if (!name) return;
-                const { error } = await supabase.from('cocurricular_types').insert({ name });
-                if (!error) { ui.closeModal(); this.loadTypes(); }
-                else ui.notify(error.message, 'error');
-            }
-        );
-    },
-
-    async deleteType(id) {
-        const { error } = await supabase.from('cocurricular_types').delete().eq('id', id);
-        if (!error) this.loadTypes();
-        else ui.notify("Cannot delete category as it is currently in use by records.", "error");
-    }
-};
-
-// --- TEACHER MODULE ---
-const teacher = {
-    async init() {
-        ui.setLoading(true);
-        const { data: grades } = await supabase.from('grade_levels').select('*').order('id');
-        const { data: types } = await supabase.from('cocurricular_types').select('*').order('name');
-        
-        state.admin.types = types || []; // Used for entry dropdown
-        
-        const gSelect = document.getElementById('teacher-grade-select');
-        gSelect.innerHTML = grades.map(g => `<option value="${g.id}">Form ${g.id}</option>`).join('');
-        gSelect.value = state.teacher.activeGrade;
-        gSelect.onchange = (e) => this.handleGradeChange(parseInt(e.target.value));
-
-        await this.handleGradeChange(state.teacher.activeGrade);
-        ui.setLoading(false);
-    },
-
-    async handleGradeChange(gradeId) {
-        state.teacher.activeGrade = gradeId;
-        const { data: classes } = await supabase
-            .from('classes')
-            .select('*')
-            .eq('grade_level_id', gradeId)
-            .order('name');
-        
-        const cSelect = document.getElementById('teacher-class-select');
-        cSelect.innerHTML = (classes || []).map(c => `<option value="${c.id}">${c.name}</option>`).join('');
-        state.teacher.activeClass = classes?.[0]?.id || null;
-    },
-
-    async loadStudents() {
-        const classId = document.getElementById('teacher-class-select').value;
-        if (!classId) return;
-        
-        ui.setLoading(true);
-        const { data } = await supabase
-            .from('students')
-            .select('*')
-            .eq('class_id', classId)
-            .order('full_name');
-        
-        state.teacher.students = data || [];
-        this.renderStudents();
-        ui.setLoading(false);
-    },
-
-    renderStudents() {
-        const container = document.getElementById('teacher-student-container');
-        container.classList.remove('hidden');
-        container.innerHTML = state.teacher.students.map(s => `
-            <div class="bg-white p-4 rounded-lg shadow border border-transparent hover:border-indigo-300 cursor-pointer transition"
-                 onclick="teacher.viewStudentDetail('${s.id}')">
-                <div class="text-xs font-mono text-slate-400 mb-1">${s.student_no || 'NO ID'}</div>
-                <div class="font-bold text-lg">${s.full_name}</div>
-                <div class="text-indigo-600 text-sm mt-2">View History &rarr;</div>
-            </div>
-        `).join('') || '<div class="col-span-full text-center py-10 bg-gray-50 rounded">No students found in this class.</div>';
-    },
-
-    async viewStudentDetail(id) {
-        state.teacher.activeStudent = state.teacher.students.find(s => s.id === id);
-        router.navigate('student-detail');
-        
-        document.getElementById('detail-student-name').innerText = state.teacher.activeStudent.full_name;
-        document.getElementById('detail-student-meta').innerText = `${state.teacher.activeStudent.student_no || 'No ID'}`;
-        
-        await this.loadHistory();
-    },
-
-    async loadHistory() {
-        const { data, error } = await supabase
-            .from('cocurricular_entries')
-            .select('*, cocurricular_types(name)')
-            .eq('student_id', state.teacher.activeStudent.id)
-            .order('activity_date', { ascending: false });
-        
-        state.teacher.history = data || [];
-        this.renderHistory();
-    },
-
-    renderHistory() {
-        const tbody = document.getElementById('history-table-body');
-        tbody.innerHTML = state.teacher.history.map(e => {
-            const isOwner = e.created_by === state.user.id || state.profile.role === 'admin';
-            return `
-                <tr>
-                    <td class="p-3 whitespace-nowrap">${new Date(e.activity_date).toLocaleDateString()}</td>
-                    <td class="p-3"><span class="px-2 py-1 bg-slate-100 rounded text-xs">${e.cocurricular_types.name}</span></td>
-                    <td class="p-3">${e.subject}</td>
-                    <td class="p-3 text-right">
-                        ${isOwner ? `
-                            <button onclick="teacher.openEntryModal('${e.id}')" class="text-blue-600 hover:underline mr-2">Edit</button>
-                            <button onclick="teacher.deleteEntry('${e.id}')" class="text-red-600 hover:underline">Del</button>
-                        ` : '<span class="text-gray-400 italic text-xs">Read Only</span>'}
-                    </td>
-                </tr>
-            `;
-        }).join('') || '<tr><td colspan="4" class="p-8 text-center text-gray-400 italic">No achievements recorded.</td></tr>';
-    },
-
-    openEntryModal(id = null) {
-        const existing = id ? state.teacher.history.find(e => e.id === id) : null;
-        const typeOptions = state.admin.types.map(t => `<option value="${t.id}" ${existing?.type_id === t.id ? 'selected' : ''}>${t.name}</option>`).join('');
-
-        ui.showModal(
-            existing ? 'Update Achievement' : 'Add New Achievement',
-            `<div class="space-y-4">
-                <div>
-                    <label class="block text-sm mb-1">Category</label>
-                    <select id="modal-field-1" class="w-full p-2 border rounded">${typeOptions}</select>
-                </div>
-                <div>
-                    <label class="block text-sm mb-1">Activity Date</label>
-                    <input type="date" id="modal-field-2" value="${existing?.activity_date || new Date().toISOString().split('T')[0]}" class="w-full p-2 border rounded">
-                </div>
-                <div>
-                    <label class="block text-sm mb-1">Description / Subject</label>
-                    <textarea id="modal-field-3" class="w-full p-2 border rounded" rows="3" placeholder="Min 3 chars">${existing?.subject || ''}</textarea>
-                </div>
-            </div>`,
-            async () => {
-                const type_id = document.getElementById('modal-field-1').value;
-                const activity_date = document.getElementById('modal-field-2').value;
-                const subject = document.getElementById('modal-field-3').value;
-
-                if (!subject || subject.length < 3) return ui.notify("Description too short", "error");
-
-                const payload = {
-                    student_id: state.teacher.activeStudent.id,
-                    type_id,
-                    activity_date,
-                    subject,
-                    created_by: state.user.id
-                };
-
-                const req = id 
-                    ? supabase.from('cocurricular_entries').update({ type_id, activity_date, subject }).eq('id', id)
-                    : supabase.from('cocurricular_entries').insert(payload);
-
-                const { error } = await req;
-                if (!error) { ui.closeModal(); this.loadHistory(); }
-                else ui.notify(error.message, 'error');
-            }
-        );
-    },
-
-    async deleteEntry(id) {
-        if (!confirm("Delete this record permanently?")) return;
-        const { error } = await supabase.from('cocurricular_entries').delete().eq('id', id);
-        if (!error) this.loadHistory();
-        else ui.notify(error.message, "error");
-    },
-
-    backToMain() {
-        router.navigate('teacher');
-    }
-};
-
-// --- UI UTILS ---
-const ui = {
-    setLoading(isLoading) {
-        document.getElementById('loading').classList.toggle('hidden', !isLoading);
-    },
-
-    notify(msg, type = 'success') {
-        const toast = document.getElementById('toast');
-        toast.innerText = msg;
-        toast.className = `fixed top-4 right-4 p-4 rounded shadow-lg transition-all duration-300 z-[100] ${type}`;
-        toast.classList.remove('hidden');
-        setTimeout(() => toast.classList.add('hidden'), 3000);
-    },
-
-    toggleSidebar(show) {
-        const sb = document.getElementById('sidebar');
-        const main = document.getElementById('main-content');
-        if (show) {
-            sb.classList.remove('hidden');
-            sb.classList.add('flex');
-            main.classList.add('md:ml-64');
-        } else {
-            sb.classList.add('hidden');
-            sb.classList.remove('flex');
-            main.classList.remove('md:ml-64');
-        }
-    },
-
-    showModal(title, contentHtml, onConfirm) {
-        document.getElementById('modal-title').innerText = title;
-        document.getElementById('modal-content').innerHTML = contentHtml;
-        const submitBtn = document.getElementById('modal-submit');
-        
-        // Clone and replace to remove old listeners
-        const newBtn = submitBtn.cloneNode(true);
-        submitBtn.parentNode.replaceChild(newBtn, submitBtn);
-        
-        newBtn.onclick = onConfirm;
-        document.getElementById('modal-container').classList.replace('hidden', 'flex');
-    },
-
-    closeModal() {
-        document.getElementById('modal-container').classList.replace('flex', 'hidden');
-    }
-};
-
-// --- INITIALIZATION ---
-window.addEventListener('DOMContentLoaded', () => {
-    // Check if Supabase keys are set
-    if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-        alert("Please set SUPABASE_URL and SUPABASE_ANON_KEY in app.js");
-        return;
+    let input;
+    if (f.type === "select") {
+      input = document.createElement("select");
+      (f.options || []).forEach((opt) => {
+        const o = document.createElement("option");
+        o.value = opt.value;
+        o.textContent = opt.label;
+        input.appendChild(o);
+      });
+    } else {
+      input = document.createElement("input");
+      input.type = f.type || "text";
     }
 
-    // Attach form listeners
-    document.getElementById('form-login').onsubmit = (e) => {
-        e.preventDefault();
-        auth.login(document.getElementById('login-email').value, document.getElementById('login-password').value);
-    };
+    input.id = id;
+    if (f.required) input.required = true;
+    if (f.minLength) input.minLength = f.minLength;
+    if (f.placeholder) input.placeholder = f.placeholder;
 
-    document.getElementById('form-signup').onsubmit = (e) => {
-        e.preventDefault();
-        auth.signup(
-            document.getElementById('signup-email').value,
-            document.getElementById('signup-password').value,
-            document.getElementById('signup-name').value
-        );
-    };
+    const initVal = initial[f.name];
+    if (initVal !== undefined && initVal !== null) input.value = String(initVal);
 
-    auth.init();
+    wrap.appendChild(label);
+    wrap.appendChild(input);
+    modalBody.appendChild(wrap);
+  });
+
+  return new Promise((resolve) => {
+    modalResolver = resolve;
+    if (typeof modal.showModal === "function") modal.showModal();
+    else modal.setAttribute("open", "open");
+  });
+}
+
+function closeModal() {
+  if (typeof modal.close === "function") modal.close();
+  else modal.removeAttribute("open");
+}
+
+modalCancel.addEventListener("click", () => {
+  if (modalResolver) modalResolver(null);
+  modalResolver = null;
+  closeModal();
 });
+
+modalForm.addEventListener("submit", (e) => {
+  e.preventDefault();
+
+  const values = {};
+  for (const f of modalFieldDefs) {
+    const el = $(`#modal_${f.name}`);
+    const val = el.value?.trim();
+    if (f.required && !val) {
+      toast("Validation", `${f.label} is required.`, "warn");
+      el.focus();
+      return;
+    }
+    if (f.minLength && val && val.length < f.minLength) {
+      toast("Validation", `${f.label} must be at least ${f.minLength} characters.`, "warn");
+      el.focus();
+      return;
+    }
+    values[f.name] = val;
+  }
+
+  if (modalResolver) modalResolver(values);
+  modalResolver = null;
+  closeModal();
+});
+
+/* ========= SUPABASE HELPERS ========= */
+async function getProfileOrThrow() {
+  const uid = state.user.id;
+
+  const { data, error } = await sb
+    .from("profiles")
+    .select("id, full_name, role")
+    .eq("id", uid)
+    .single();
+
+  // If row doesn't exist (should exist due to trigger), create it as teacher.
+  if (error && error.code === "PGRST116") {
+    const { error: insErr } = await sb.from("profiles").insert({
+      id: uid,
+      full_name: state.user.email || "",
+      role: "teacher",
+    });
+    if (insErr) throw insErr;
+
+    const { data: data2, error: err2 } = await sb
+      .from("profiles")
+      .select("id, full_name, role")
+      .eq("id", uid)
+      .single();
+    if (err2) throw err2;
+    return data2;
+  }
+
+  if (error) throw error;
+  return data;
+}
+
+async function fetchGradeLevels() {
+  const { data, error } = await sb
+    .from("grade_levels")
+    .select("id, name")
+    .order("id", { ascending: true });
+
+  if (error) throw error;
+  return data || [];
+}
+
+async function fetchTypes() {
+  const { data, error } = await sb
+    .from("cocurricular_types")
+    .select("id, name")
+    .order("name", { ascending: true });
+
+  if (error) throw error;
+  return data || [];
+}
+
+async function fetchClassesByGrade(gradeLevelId) {
+  const { data, error } = await sb
+    .from("classes")
+    .select("id, grade_level_id, name")
+    .eq("grade_level_id", gradeLevelId)
+    .order("name", { ascending: true });
+
+  if (error) throw error;
+  return data || [];
+}
+
+async function fetchStudentsByClass(classId) {
+  const { data, error } = await sb
+    .from("students")
+    .select("id, class_id, full_name, student_no")
+    .eq("class_id", classId)
+    .order("full_name", { ascending: true });
+
+  if (error) throw error;
+  return data || [];
+}
+
+async function fetchEntriesByStudent(studentId) {
+  const { data, error } = await sb
+    .from("cocurricular_entries")
+    .select("id, subject, activity_date, created_by, created_at, type_id, cocurricular_types(name)")
+    .eq("student_id", studentId)
+    .order("activity_date", { ascending: false })
+    .order("created_at", { ascending: false });
+
+  if (error) throw error;
+  return data || [];
+}
+
+/* ========= CRUD (Admin) ========= */
+async function createClass(payload) {
+  const { error } = await sb.from("classes").insert(payload);
+  if (error) throw error;
+}
+async function updateClass(id, payload) {
+  const { error } = await sb.from("classes").update(payload).eq("id", id);
+  if (error) throw error;
+}
+async function deleteClass(id) {
+  const { error } = await sb.from("classes").delete().eq("id", id);
+  if (error) throw error;
+}
+
+async function createStudent(payload) {
+  const { error } = await sb.from("students").insert(payload);
+  if (error) throw error;
+}
+async function updateStudent(id, payload) {
+  const { error } = await sb.from("students").update(payload).eq("id", id);
+  if (error) throw error;
+}
+async function deleteStudent(id) {
+  const { error } = await sb.from("students").delete().eq("id", id);
+  if (error) throw error;
+}
+
+async function createType(payload) {
+  const { error } = await sb.from("cocurricular_types").insert(payload);
+  if (error) throw error;
+}
+async function updateType(id, payload) {
+  const { error } = await sb.from("cocurricular_types").update(payload).eq("id", id);
+  if (error) throw error;
+}
+async function deleteType(id) {
+  const { error } = await sb.from("cocurricular_types").delete().eq("id", id);
+  if (error) throw error;
+}
+
+/* ========= CRUD (Entries) ========= */
+async function createEntry(payload) {
+  const { error } = await sb.from("cocurricular_entries").insert(payload);
+  if (error) throw error;
+}
+async function updateEntry(id, payload) {
+  const { error } = await sb.from("cocurricular_entries").update(payload).eq("id", id);
+  if (error) throw error;
+}
+async function deleteEntry(id) {
+  const { error } = await sb.from("cocurricular_entries").delete().eq("id", id);
+  if (error) throw error;
+}
+
+/* ========= RENDERERS ========= */
+function populateGradeSelect(selectEl, selectedId) {
+  selectEl.innerHTML = "";
+  state.gradeLevels.forEach((g) => {
+    const opt = document.createElement("option");
+    opt.value = String(g.id);
+    opt.textContent = g.name;
+    selectEl.appendChild(opt);
+  });
+  selectEl.value = String(selectedId ?? 1);
+}
+
+function populateTypeSelect(selectEl, selectedId = "") {
+  selectEl.innerHTML = `<option value="">Select type…</option>`;
+  state.types.forEach((t) => {
+    const opt = document.createElement("option");
+    opt.value = t.id;
+    opt.textContent = t.name;
+    selectEl.appendChild(opt);
+  });
+  if (selectedId) selectEl.value = selectedId;
+}
+
+function gradeName(id) {
+  const g = state.gradeLevels.find((x) => x.id === Number(id));
+  return g ? g.name : `Form ${id}`;
+}
+
+/* Admin tables */
+function renderClassesTable() {
+  tblClassesBody.innerHTML = "";
+  if (!state.adminClasses.length) {
+    tblClassesBody.innerHTML = `<tr><td colspan="3" class="muted">No classes found.</td></tr>`;
+    return;
+  }
+
+  state.adminClasses.forEach((c) => {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${escapeHtml(c.name)}</td>
+      <td>${escapeHtml(gradeName(c.grade_level_id))}</td>
+      <td class="right">
+        <div class="actions">
+          <button class="btn secondary" data-action="edit" data-id="${c.id}">Edit</button>
+          <button class="btn danger" data-action="del" data-id="${c.id}">Delete</button>
+        </div>
+      </td>
+    `;
+    tblClassesBody.appendChild(tr);
+  });
+}
+
+function populateAdminClassSelect() {
+  adminClassSelect.innerHTML = "";
+  if (!state.adminClasses.length) {
+    const opt = document.createElement("option");
+    opt.value = "";
+    opt.textContent = "No classes";
+    adminClassSelect.appendChild(opt);
+    adminClassSelect.disabled = true;
+    state.adminSelectedClassId = null;
+    return;
+  }
+
+  adminClassSelect.disabled = false;
+  state.adminClasses.forEach((c) => {
+    const opt = document.createElement("option");
+    opt.value = c.id;
+    opt.textContent = c.name;
+    adminClassSelect.appendChild(opt);
+  });
+
+  // keep selection if possible
+  if (state.adminSelectedClassId && state.adminClasses.some(c => c.id === state.adminSelectedClassId)) {
+    adminClassSelect.value = state.adminSelectedClassId;
+  } else {
+    state.adminSelectedClassId = state.adminClasses[0].id;
+    adminClassSelect.value = state.adminSelectedClassId;
+  }
+}
+
+function renderStudentsTable() {
+  tblStudentsBody.innerHTML = "";
+  if (!state.adminSelectedClassId) {
+    tblStudentsBody.innerHTML = `<tr><td colspan="3" class="muted">Select a class.</td></tr>`;
+    return;
+  }
+  if (!state.adminStudents.length) {
+    tblStudentsBody.innerHTML = `<tr><td colspan="3" class="muted">No students found.</td></tr>`;
+    return;
+  }
+
+  state.adminStudents.forEach((s) => {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${escapeHtml(s.full_name)}</td>
+      <td>${escapeHtml(s.student_no || "-")}</td>
+      <td class="right">
+        <div class="actions">
+          <button class="btn secondary" data-action="edit" data-id="${s.id}">Edit</button>
+          <button class="btn danger" data-action="del" data-id="${s.id}">Delete</button>
+        </div>
+      </td>
+    `;
+    tblStudentsBody.appendChild(tr);
+  });
+}
+
+function renderTypesTable() {
+  tblTypesBody.innerHTML = "";
+  if (!state.types.length) {
+    tblTypesBody.innerHTML = `<tr><td colspan="2" class="muted">No types found.</td></tr>`;
+    return;
+  }
+
+  state.types.forEach((t) => {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${escapeHtml(t.name)}</td>
+      <td class="right">
+        <div class="actions">
+          <button class="btn secondary" data-action="edit" data-id="${t.id}">Edit</button>
+          <button class="btn danger" data-action="del" data-id="${t.id}">Delete</button>
+        </div>
+      </td>
+    `;
+    tblTypesBody.appendChild(tr);
+  });
+}
+
+/* Teacher view */
+function populateTeacherClassSelect() {
+  teacherClassSelect.innerHTML = "";
+  if (!state.teacherClasses.length) {
+    teacherClassSelect.disabled = true;
+    teacherClassSelect.innerHTML = `<option value="">No classes</option>`;
+    state.teacherSelectedClassId = null;
+    return;
+  }
+  teacherClassSelect.disabled = false;
+
+  state.teacherClasses.forEach((c) => {
+    const opt = document.createElement("option");
+    opt.value = c.id;
+    opt.textContent = c.name;
+    teacherClassSelect.appendChild(opt);
+  });
+
+  if (state.teacherSelectedClassId && state.teacherClasses.some(c => c.id === state.teacherSelectedClassId)) {
+    teacherClassSelect.value = state.teacherSelectedClassId;
+  } else {
+    state.teacherSelectedClassId = state.teacherClasses[0].id;
+    teacherClassSelect.value = state.teacherSelectedClassId;
+  }
+}
+
+function renderTeacherStudents() {
+  const q = (studentSearch.value || "").trim().toLowerCase();
+  const rows = q
+    ? state.teacherStudents.filter(s => (s.full_name || "").toLowerCase().includes(q))
+    : state.teacherStudents;
+
+  tblTeacherStudentsBody.innerHTML = "";
+  if (!state.teacherSelectedClassId) {
+    tblTeacherStudentsBody.innerHTML = `<tr><td colspan="3" class="muted">Select a class.</td></tr>`;
+    return;
+  }
+  if (!rows.length) {
+    tblTeacherStudentsBody.innerHTML = `<tr><td colspan="3" class="muted">No students found.</td></tr>`;
+    return;
+  }
+
+  rows.forEach((s) => {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${escapeHtml(s.full_name)}</td>
+      <td>${escapeHtml(s.student_no || "-")}</td>
+      <td class="right">
+        <button class="btn primary" data-action="open" data-id="${s.id}">Open</button>
+      </td>
+    `;
+    tblTeacherStudentsBody.appendChild(tr);
+  });
+}
+
+function renderEntriesTable() {
+  tblEntriesBody.innerHTML = "";
+  if (!state.selectedStudent) {
+    tblEntriesBody.innerHTML = `<tr><td colspan="5" class="muted">No student selected.</td></tr>`;
+    return;
+  }
+
+  if (!state.studentEntries.length) {
+    tblEntriesBody.innerHTML = `<tr><td colspan="5" class="muted">No entries yet.</td></tr>`;
+    return;
+  }
+
+  state.studentEntries.forEach((e) => {
+    const canManage = (state.role === "admin") || (e.created_by === state.user.id);
+    const typeName = e.cocurricular_types?.name || "(Unknown)";
+    const createdTag = e.created_by === state.user.id ? `<span class="badge ok">mine</span>` : `<span class="badge">teacher</span>`;
+
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${escapeHtml(e.activity_date)}</td>
+      <td>${escapeHtml(typeName)}</td>
+      <td>${escapeHtml(e.subject)}</td>
+      <td>${createdTag}</td>
+      <td class="right">
+        <div class="actions">
+          <button class="btn secondary" data-action="edit" data-id="${e.id}" ${canManage ? "" : "disabled"}>Edit</button>
+          <button class="btn danger" data-action="del" data-id="${e.id}" ${canManage ? "" : "disabled"}>Delete</button>
+        </div>
+      </td>
+    `;
+    tblEntriesBody.appendChild(tr);
+  });
+}
+
+/* ========= LOADERS ========= */
+async function loadBootstrapData() {
+  state.gradeLevels = await fetchGradeLevels();
+  state.types = await fetchTypes();
+
+  populateGradeSelect(adminGradeSelect, state.adminSelectedGrade);
+  populateGradeSelect(teacherGradeSelect, state.teacherSelectedGrade);
+  populateTypeSelect(entryType);
+
+  renderTypesTable();
+}
+
+async function loadAdminClassesAndStudents() {
+  state.adminClasses = await fetchClassesByGrade(state.adminSelectedGrade);
+  renderClassesTable();
+  populateAdminClassSelect();
+
+  if (state.adminSelectedClassId) {
+    state.adminStudents = await fetchStudentsByClass(state.adminSelectedClassId);
+  } else {
+    state.adminStudents = [];
+  }
+  renderStudentsTable();
+}
+
+async function loadTeacherClassesAndStudents() {
+  state.teacherClasses = await fetchClassesByGrade(state.teacherSelectedGrade);
+  populateTeacherClassSelect();
+
+  if (state.teacherSelectedClassId) {
+    state.teacherStudents = await fetchStudentsByClass(state.teacherSelectedClassId);
+  } else {
+    state.teacherStudents = [];
+  }
+  renderTeacherStudents();
+}
+
+async function openStudent(studentId) {
+  const student = state.teacherStudents.find(s => s.id === studentId)
+    || state.adminStudents.find(s => s.id === studentId);
+
+  state.selectedStudent = student || { id: studentId, full_name: "Student" };
+
+  studentTitle.textContent = state.selectedStudent.full_name;
+  const gradeLabel = gradeName(state.teacherSelectedGrade);
+  const classLabel = state.teacherClasses.find(c => c.id === state.teacherSelectedClassId)?.name || "";
+  studentSub.textContent = `${gradeLabel}${classLabel ? " • " + classLabel : ""}`;
+
+  populateTypeSelect(entryType);
+  entrySubject.value = "";
+  entryDate.valueAsDate = new Date();
+
+  state.studentEntries = await fetchEntriesByStudent(studentId);
+  renderEntriesTable();
+
+  showView("student");
+}
+
+/* ========= AUTH + ROUTING ========= */
+function updateAuthUI() {
+  const authed = !!state.user;
+
+  document.querySelectorAll(".requires-auth").forEach((el) => {
+    el.classList.toggle("hidden", !authed);
+  });
+
+  userBadge.classList.toggle("hidden", !authed);
+
+  if (authed) {
+    userEmail.textContent = state.user.email || "(no email)";
+    userRole.textContent = state.role || "teacher";
+  }
+
+  navAdmin.classList.toggle("hidden", !authed);
+  navTeacher.classList.toggle("hidden", !authed);
+}
+
+async function routeAfterLogin() {
+  updateAuthUI();
+
+  if (!state.user) {
+    showView("login");
+    return;
+  }
+
+  if (state.role === "admin") {
+    showView("admin");
+    await refreshAllAdmin();
+  } else {
+    showView("teacher");
+    await refreshAllTeacher();
+  }
+}
+
+async function refreshAllAdmin() {
+  setLoading(true);
+  try {
+    await loadBootstrapData();
+    await loadAdminClassesAndStudents();
+    toast("Ready", "Admin console loaded.", "ok");
+  } catch (e) {
+    toast("Error", e.message || "Failed to load admin data.", "err");
+  } finally {
+    setLoading(false);
+  }
+}
+
+async function refreshAllTeacher() {
+  setLoading(true);
+  try {
+    await loadBootstrapData();
+    await loadTeacherClassesAndStudents();
+    toast("Ready", "Teacher view loaded.", "ok");
+  } catch (e) {
+    toast("Error", e.message || "Failed to load teacher data.", "err");
+  } finally {
+    setLoading(false);
+  }
+}
+
+/* ========= EVENTS ========= */
+navLogin.addEventListener("click", () => showView("login"));
+navAdmin.addEventListener("click", async () => {
+  showView("admin");
+  if (state.role === "admin") await refreshAllAdmin();
+});
+navTeacher.addEventListener("click", async () => {
+  showView("teacher");
+  await refreshAllTeacher();
+});
+
+logoutBtn.addEventListener("click", async () => {
+  setLoading(true);
+  try {
+    await sb.auth.signOut();
+    toast("Signed out", "You have been logged out.", "ok");
+  } catch (e) {
+    toast("Error", e.message || "Logout failed.", "err");
+  } finally {
+    setLoading(false);
+  }
+});
+
+goSignupBtn.addEventListener("click", () => signupPanel.classList.remove("hidden"));
+cancelSignupBtn.addEventListener("click", () => signupPanel.classList.add("hidden"));
+
+loginForm.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  clearUnauthorized();
+
+  const email = $("#login-email").value.trim();
+  const password = $("#login-password").value;
+
+  if (!email || !password) {
+    toast("Validation", "Email and password are required.", "warn");
+    return;
+  }
+
+  setLoading(true);
+  try {
+    const { data, error } = await sb.auth.signInWithPassword({ email, password });
+    if (error) throw error;
+
+    state.session = data.session;
+    state.user = data.user;
+
+    state.profile = await getProfileOrThrow();
+    state.role = state.profile.role;
+
+    toast("Welcome", `Signed in as ${state.role}.`, "ok");
+    await routeAfterLogin();
+  } catch (err) {
+    toast("Login failed", err.message || "Invalid credentials.", "err");
+  } finally {
+    setLoading(false);
+  }
+});
+
+signupForm.addEventListener("submit", async (e) => {
+  e.preventDefault();
+
+  const email = $("#signup-email").value.trim();
+  const password = $("#signup-password").value;
+
+  setLoading(true);
+  try {
+    const { data, error } = await sb.auth.signUp({
+      email,
+      password,
+      options: {
+        data: { full_name: "" }
+      }
+    });
+    if (error) throw error;
+
+    toast("Signed up", "Teacher account created. You may need to confirm email (depending on Auth settings).", "ok", 4200);
+    signupPanel.classList.add("hidden");
+
+    // If session exists immediately, route; else stay on login.
+    const s = data.session;
+    if (s) {
+      state.session = s;
+      state.user = data.user;
+      state.profile = await getProfileOrThrow();
+      state.role = state.profile.role;
+      await routeAfterLogin();
+    }
+  } catch (err) {
+    toast("Sign up failed", err.message || "Could not create user.", "err");
+  } finally {
+    setLoading(false);
+  }
+});
+
+/* Admin grade change */
+adminGradeSelect.addEventListener("change", async () => {
+  state.adminSelectedGrade = Number(adminGradeSelect.value);
+  setLoading(true);
+  try {
+    await loadAdminClassesAndStudents();
+  } catch (e) {
+    toast("Error", e.message || "Failed loading classes.", "err");
+  } finally {
+    setLoading(false);
+  }
+});
+
+/* Admin class change -> load students */
+adminClassSelect.addEventListener("change", async () => {
+  state.adminSelectedClassId = adminClassSelect.value || null;
+  setLoading(true);
+  try {
+    state.adminStudents = state.adminSelectedClassId
+      ? await fetchStudentsByClass(state.adminSelectedClassId)
+      : [];
+    renderStudentsTable();
+  } catch (e) {
+    toast("Error", e.message || "Failed loading students.", "err");
+  } finally {
+    setLoading(false);
+  }
+});
+
+/* Create class */
+btnClassCreate.addEventListener("click", async () => {
+  if (state.role !== "admin") return;
+
+  const values = await openModal({
+    title: "Create Class",
+    submitText: "Create",
+    fields: [
+      {
+        name: "grade_level_id",
+        label: "Grade",
+        type: "select",
+        required: true,
+        options: state.gradeLevels.map(g => ({ value: String(g.id), label: g.name })),
+      },
+      { name: "name", label: "Class Name", type: "text", required: true, minLength: 1, placeholder: "e.g., Amanah" },
+    ],
+    initial: { grade_level_id: String(state.adminSelectedGrade), name: "" }
+  });
+
+  if (!values) return;
+
+  setLoading(true);
+  try {
+    await createClass({
+      grade_level_id: Number(values.grade_level_id),
+      name: values.name.trim(),
+    });
+    toast("Success", "Class created.", "ok");
+    state.adminSelectedGrade = Number(values.grade_level_id);
+    adminGradeSelect.value = String(state.adminSelectedGrade);
+    await loadAdminClassesAndStudents();
+  } catch (e) {
+    toast("Error", e.message || "Class create blocked (RLS?)", "err");
+  } finally {
+    setLoading(false);
+  }
+});
+
+/* Classes table actions */
+tblClassesBody.addEventListener("click", async (e) => {
+  const btn = e.target.closest("button");
+  if (!btn) return;
+  const id = btn.dataset.id;
+  const action = btn.dataset.action;
+
+  const row = state.adminClasses.find(c => c.id === id);
+  if (!row) return;
+
+  if (action === "edit") {
+    const values = await openModal({
+      title: "Edit Class",
+      submitText: "Save",
+      fields: [
+        {
+          name: "grade_level_id",
+          label: "Grade",
+          type: "select",
+          required: true,
+          options: state.gradeLevels.map(g => ({ value: String(g.id), label: g.name })),
+        },
+        { name: "name", label: "Class Name", type: "text", required: true, minLength: 1 },
+      ],
+      initial: { grade_level_id: String(row.grade_level_id), name: row.name }
+    });
+    if (!values) return;
+
+    setLoading(true);
+    try {
+      await updateClass(id, {
+        grade_level_id: Number(values.grade_level_id),
+        name: values.name.trim(),
+      });
+      toast("Success", "Class updated.", "ok");
+      state.adminSelectedGrade = Number(values.grade_level_id);
+      adminGradeSelect.value = String(state.adminSelectedGrade);
+      await loadAdminClassesAndStudents();
+    } catch (err) {
+      toast("Error", err.message || "Update blocked (RLS?)", "err");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  if (action === "del") {
+    if (!confirm(`Delete class "${row.name}"? This will also delete students & entries in it.`)) return;
+
+    setLoading(true);
+    try {
+      await deleteClass(id);
+      toast("Deleted", "Class deleted.", "ok");
+      await loadAdminClassesAndStudents();
+    } catch (err) {
+      toast("Error", err.message || "Delete blocked (RLS?)", "err");
+    } finally {
+      setLoading(false);
+    }
+  }
+});
+
+/* Create student */
+btnStudentCreate.addEventListener("click", async () => {
+  if (state.role !== "admin") return;
+
+  if (!state.adminSelectedClassId) {
+    toast("Select class", "Please select a class first.", "warn");
+    return;
+  }
+
+  const values = await openModal({
+    title: "Create Student",
+    submitText: "Create",
+    fields: [
+      {
+        name: "class_id",
+        label: "Class",
+        type: "select",
+        required: true,
+        options: state.adminClasses.map(c => ({ value: c.id, label: c.name })),
+      },
+      { name: "full_name", label: "Full Name", type: "text", required: true, minLength: 1, placeholder: "Student name" },
+      { name: "student_no", label: "Student No (optional)", type: "text", required: false, placeholder: "e.g., S12345" },
+    ],
+    initial: { class_id: state.adminSelectedClassId, full_name: "", student_no: "" }
+  });
+
+  if (!values) return;
+
+  setLoading(true);
+  try {
+    await createStudent({
+      class_id: values.class_id,
+      full_name: values.full_name.trim(),
+      student_no: values.student_no ? values.student_no.trim() : null
+    });
+    toast("Success", "Student created.", "ok");
+    state.adminSelectedClassId = values.class_id;
+    adminClassSelect.value = values.class_id;
+
+    state.adminStudents = await fetchStudentsByClass(state.adminSelectedClassId);
+    renderStudentsTable();
+  } catch (err) {
+    toast("Error", err.message || "Create blocked (RLS?)", "err");
+  } finally {
+    setLoading(false);
+  }
+});
+
+/* Students table actions */
+tblStudentsBody.addEventListener("click", async (e) => {
+  const btn = e.target.closest("button");
+  if (!btn) return;
+  const id = btn.dataset.id;
+  const action = btn.dataset.action;
+
+  const row = state.adminStudents.find(s => s.id === id);
+  if (!row) return;
+
+  if (action === "edit") {
+    const values = await openModal({
+      title: "Edit Student",
+      submitText: "Save",
+      fields: [
+        {
+          name: "class_id",
+          label: "Class",
+          type: "select",
+          required: true,
+          options: state.adminClasses.map(c => ({ value: c.id, label: c.name })),
+        },
+        { name: "full_name", label: "Full Name", type: "text", required: true, minLength: 1 },
+        { name: "student_no", label: "Student No (optional)", type: "text", required: false },
+      ],
+      initial: { class_id: row.class_id, full_name: row.full_name, student_no: row.student_no || "" }
+    });
+    if (!values) return;
+
+    setLoading(true);
+    try {
+      await updateStudent(id, {
+        class_id: values.class_id,
+        full_name: values.full_name.trim(),
+        student_no: values.student_no ? values.student_no.trim() : null
+      });
+      toast("Success", "Student updated.", "ok");
+
+      state.adminSelectedClassId = values.class_id;
+      adminClassSelect.value = values.class_id;
+
+      state.adminStudents = await fetchStudentsByClass(state.adminSelectedClassId);
+      renderStudentsTable();
+    } catch (err) {
+      toast("Error", err.message || "Update blocked (RLS?)", "err");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  if (action === "del") {
+    if (!confirm(`Delete student "${row.full_name}"? Entries will be deleted too.`)) return;
+
+    setLoading(true);
+    try {
+      await deleteStudent(id);
+      toast("Deleted", "Student deleted.", "ok");
+      state.adminStudents = await fetchStudentsByClass(state.adminSelectedClassId);
+      renderStudentsTable();
+    } catch (err) {
+      toast("Error", err.message || "Delete blocked (RLS?)", "err");
+    } finally {
+      setLoading(false);
+    }
+  }
+});
+
+/* Create type */
+btnTypeCreate.addEventListener("click", async () => {
+  if (state.role !== "admin") return;
+
+  const values = await openModal({
+    title: "Create Co-curricular Type",
+    submitText: "Create",
+    fields: [
+      { name: "name", label: "Type Name", type: "text", required: true, minLength: 1, placeholder: "e.g., Sports" }
+    ],
+    initial: { name: "" }
+  });
+  if (!values) return;
+
+  setLoading(true);
+  try {
+    await createType({ name: values.name.trim() });
+    toast("Success", "Type created.", "ok");
+    state.types = await fetchTypes();
+    renderTypesTable();
+    populateTypeSelect(entryType);
+  } catch (err) {
+    toast("Error", err.message || "Create blocked (RLS?)", "err");
+  } finally {
+    setLoading(false);
+  }
+});
+
+/* Types table actions */
+tblTypesBody.addEventListener("click", async (e) => {
+  const btn = e.target.closest("button");
+  if (!btn) return;
+  const id = btn.dataset.id;
+  const action = btn.dataset.action;
+
+  const row = state.types.find(t => t.id === id);
+  if (!row) return;
+
+  if (action === "edit") {
+    const values = await openModal({
+      title: "Edit Type",
+      submitText: "Save",
+      fields: [
+        { name: "name", label: "Type Name", type: "text", required: true, minLength: 1 }
+      ],
+      initial: { name: row.name }
+    });
+    if (!values) return;
+
+    setLoading(true);
+    try {
+      await updateType(id, { name: values.name.trim() });
+      toast("Success", "Type updated.", "ok");
+      state.types = await fetchTypes();
+      renderTypesTable();
+      populateTypeSelect(entryType);
+    } catch (err) {
+      toast("Error", err.message || "Update blocked (RLS?)", "err");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  if (action === "del") {
+    if (!confirm(`Delete type "${row.name}"? This may fail if entries reference it.`)) return;
+
+    setLoading(true);
+    try {
+      await deleteType(id);
+      toast("Deleted", "Type deleted.", "ok");
+      state.types = await fetchTypes();
+      renderTypesTable();
+      populateTypeSelect(entryType);
+    } catch (err) {
+      toast("Error", err.message || "Delete failed (in use?)", "err");
+    } finally {
+      setLoading(false);
+    }
+  }
+});
+
+/* Teacher grade/class changes */
+teacherGradeSelect.addEventListener("change", async () => {
+  state.teacherSelectedGrade = Number(teacherGradeSelect.value);
+  setLoading(true);
+  try {
+    await loadTeacherClassesAndStudents();
+  } catch (e) {
+    toast("Error", e.message || "Failed loading classes.", "err");
+  } finally {
+    setLoading(false);
+  }
+});
+
+teacherClassSelect.addEventListener("change", async () => {
+  state.teacherSelectedClassId = teacherClassSelect.value || null;
+  setLoading(true);
+  try {
+    state.teacherStudents = state.teacherSelectedClassId
+      ? await fetchStudentsByClass(state.teacherSelectedClassId)
+      : [];
+    renderTeacherStudents();
+  } catch (e) {
+    toast("Error", e.message || "Failed loading students.", "err");
+  } finally {
+    setLoading(false);
+  }
+});
+
+studentSearch.addEventListener("input", () => renderTeacherStudents());
+
+/* Open student from teacher list */
+tblTeacherStudentsBody.addEventListener("click", async (e) => {
+  const btn = e.target.closest("button");
+  if (!btn) return;
+  if (btn.dataset.action !== "open") return;
+
+  const id = btn.dataset.id;
+  setLoading(true);
+  try {
+    await openStudent(id);
+  } catch (err) {
+    toast("Error", err.message || "Failed opening student.", "err");
+  } finally {
+    setLoading(false);
+  }
+});
+
+backTeacherBtn.addEventListener("click", async () => {
+  showView("teacher");
+  // refresh student list quickly (optional)
+  await refreshAllTeacher();
+});
+
+/* Add entry */
+entryForm.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  if (!state.selectedStudent) return;
+
+  const subject = entrySubject.value.trim();
+  const activity_date = entryDate.value;
+  const type_id = entryType.value;
+
+  // Validation
+  if (!subject || subject.length < 3) {
+    toast("Validation", "Subject is required (min 3 chars).", "warn");
+    entrySubject.focus();
+    return;
+  }
+  if (!activity_date) {
+    toast("Validation", "Activity date is required.", "warn");
+    entryDate.focus();
+    return;
+  }
+  if (!type_id) {
+    toast("Validation", "Type is required.", "warn");
+    entryType.focus();
+    return;
+  }
+
+  // Optional: disallow future date
+  const today = new Date();
+  today.setHours(0,0,0,0);
+  const d = new Date(activity_date + "T00:00:00");
+  if (d.getTime() > today.getTime()) {
+    toast("Validation", "Future dates are not allowed.", "warn");
+    entryDate.focus();
+    return;
+  }
+
+  setLoading(true);
+  try {
+    await createEntry({
+      student_id: state.selectedStudent.id,
+      type_id,
+      subject,
+      activity_date,
+      created_by: state.user.id, // required by RLS policy
+    });
+
+    toast("Saved", "Entry created.", "ok");
+    entrySubject.value = "";
+    entryDate.valueAsDate = new Date();
+    entryType.value = "";
+
+    state.studentEntries = await fetchEntriesByStudent(state.selectedStudent.id);
+    renderEntriesTable();
+  } catch (err) {
+    toast("Error", err.message || "Insert blocked (RLS?)", "err");
+  } finally {
+    setLoading(false);
+  }
+});
+
+/* Entry actions */
+tblEntriesBody.addEventListener("click", async (e) => {
+  const btn = e.target.closest("button");
+  if (!btn) return;
+
+  const id = btn.dataset.id;
+  const action = btn.dataset.action;
+  const row = state.studentEntries.find(x => x.id === id);
+  if (!row) return;
+
+  const canManage = (state.role === "admin") || (row.created_by === state.user.id);
+  if (!canManage) {
+    toast("Unauthorized", "You can only manage entries you created (unless admin).", "warn");
+    return;
+  }
+
+  if (action === "edit") {
+    const values = await openModal({
+      title: "Edit Entry",
+      submitText: "Save",
+      fields: [
+        { name: "subject", label: "Subject", type: "text", required: true, minLength: 3 },
+        { name: "activity_date", label: "Activity Date", type: "date", required: true },
+        {
+          name: "type_id",
+          label: "Type",
+          type: "select",
+          required: true,
+          options: state.types.map(t => ({ value: t.id, label: t.name })),
+        },
+      ],
+      initial: {
+        subject: row.subject,
+        activity_date: row.activity_date,
+        type_id: row.type_id
+      }
+    });
+
+    if (!values) return;
+
+    // Future date block (optional)
+    const today = new Date();
+    today.setHours(0,0,0,0);
+    const d = new Date(values.activity_date + "T00:00:00");
+    if (d.getTime() > today.getTime()) {
+      toast("Validation", "Future dates are not allowed.", "warn");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      await updateEntry(id, {
+        subject: values.subject.trim(),
+        activity_date: values.activity_date,
+        type_id: values.type_id
+      });
+      toast("Success", "Entry updated.", "ok");
+      state.studentEntries = await fetchEntriesByStudent(state.selectedStudent.id);
+      renderEntriesTable();
+    } catch (err) {
+      toast("Error", err.message || "Update blocked (RLS?)", "err");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  if (action === "del") {
+    if (!confirm("Delete this entry?")) return;
+
+    setLoading(true);
+    try {
+      await deleteEntry(id);
+      toast("Deleted", "Entry deleted.", "ok");
+      state.studentEntries = await fetchEntriesByStudent(state.selectedStudent.id);
+      renderEntriesTable();
+    } catch (err) {
+      toast("Error", err.message || "Delete blocked (RLS?)", "err");
+    } finally {
+      setLoading(false);
+    }
+  }
+});
+
+/* ========= INIT ========= */
+async function init() {
+  // If config not set, warn early
+  if (SUPABASE_URL.includes("YOUR_") || SUPABASE_ANON_KEY.includes("YOUR_")) {
+    toast("Setup needed", "Set SUPABASE_URL and SUPABASE_ANON_KEY in app.js", "warn", 6000);
+  }
+
+  setLoading(true);
+  try {
+    const { data } = await sb.auth.getSession();
+    state.session = data.session;
+    state.user = data.session?.user || null;
+
+    if (state.user) {
+      state.profile = await getProfileOrThrow();
+      state.role = state.profile.role;
+    }
+
+    updateAuthUI();
+    await routeAfterLogin();
+  } catch (e) {
+    toast("Error", e.message || "Initialization failed.", "err");
+    showView("login");
+  } finally {
+    setLoading(false);
+  }
+
+  // Keep UI in sync on auth changes (token refresh, logout, etc.)
+  sb.auth.onAuthStateChange(async (_event, session) => {
+    state.session = session;
+    state.user = session?.user || null;
+
+    if (state.user) {
+      try {
+        state.profile = await getProfileOrThrow();
+        state.role = state.profile.role;
+      } catch (e) {
+        toast("Error", e.message || "Profile read failed.", "err");
+        state.profile = null;
+        state.role = null;
+      }
+    } else {
+      state.profile = null;
+      state.role = null;
+      state.selectedStudent = null;
+      state.studentEntries = [];
+    }
+
+    updateAuthUI();
+    await routeAfterLogin();
+  });
+}
+
+init();
