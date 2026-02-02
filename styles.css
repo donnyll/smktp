@@ -83,15 +83,15 @@ body {
   justify-content: center;
   font-size: 20px;
   box-shadow: var(--shadow-glow);
-  overflow: hidden; /* Clips corners */
-  padding: 0; /* Remove padding for image */
+  overflow: hidden; /* Clips corners for image */
+  padding: 0;
 }
 
-/* Added: CSS untuk paksa gambar muat penuh */
+/* Added: CSS untuk paksa gambar muat penuh (PENTING) */
 .brand-icon img {
   width: 100%;
   height: 100%;
-  object-fit: contain; /* TUKAR DARI COVER KE CONTAIN: Supaya logo tak kena crop */
+  object-fit: contain; /* Guna CONTAIN supaya logo tak kena potong (crop) */
   display: block;
 }
 
@@ -177,12 +177,12 @@ body {
   position: absolute;
   inset: 0;
   max-width: none;
-  /* Use variable, fallback to default URL */
+  /* Use variable, fallback to default URL (PENTING UNTUK CUSTOM BACKGROUND) */
   background-image: var(--bg-login-image, url('https://images.unsplash.com/photo-1461896836934-ffe607ba8211?ixlib=rb-4.0.3&auto=format&fit=crop&w=2070&q=80'));
-  background-position: center; /* Sentiasa tengah */
+  background-position: center center; /* Sentiasa tengah */
   background-repeat: no-repeat;
-  background-size: cover; /* Penuhi skrin. Jika mahu herot (stretch), tukar kepada 100% 100% */
-  background-attachment: fixed; /* Pastikan background statik */
+  background-size: cover; /* Penuhi skrin sepenuhnya */
+  background-attachment: fixed; /* Background statik */
   display: flex;
   align-items: center;
   justify-content: center;
