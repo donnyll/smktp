@@ -34,13 +34,16 @@
 
 * { box-sizing: border-box; }
 
-body {
+/* FIX UTAMA: Kunci scroll body supaya app rasa 'native' */
+html, body {
   margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
   font-family: var(--font-sans);
   background-color: var(--bg-body);
   color: var(--text-main);
-  height: 100vh;
-  overflow-x: hidden;
+  overflow: hidden; /* Halang scroll luar */
 }
 
 .hidden { display: none !important; }
@@ -49,7 +52,9 @@ body {
 #app {
   display: grid;
   grid-template-columns: 260px 1fr;
-  height: 100vh;
+  height: 100%; /* Ikut tinggi body */
+  width: 100%;
+  overflow: hidden;
 }
 
 /* Sidebar */
@@ -60,7 +65,7 @@ body {
   display: flex;
   flex-direction: column;
   position: relative;
-  z-index: 10;
+  z-index: 20;
 }
 
 .brand {
@@ -71,10 +76,10 @@ body {
   padding: 0 8px;
 }
 
-/* Updated Brand Icon Logic */
+/* Brand Icon */
 .brand-icon {
   width: 40px; height: 40px;
-  min-width: 40px; /* Prevent shrinking */
+  min-width: 40px; 
   background: var(--primary);
   color: white;
   border-radius: 10px;
@@ -83,15 +88,14 @@ body {
   justify-content: center;
   font-size: 20px;
   box-shadow: var(--shadow-glow);
-  overflow: hidden; /* Clips corners for image */
+  overflow: hidden;
   padding: 0;
 }
 
-/* CSS untuk paksa gambar muat penuh (CONTAIN) */
 .brand-icon img {
   width: 100%;
   height: 100%;
-  object-fit: contain; /* Logo tak kena crop */
+  object-fit: contain; /* Logo penuh */
   display: block;
 }
 
@@ -165,37 +169,35 @@ body {
 /* Main Area */
 .main {
   padding: 32px;
-  overflow-y: auto;
+  overflow-y: auto; /* Content scroll di sini */
+  height: 100%;
   background: radial-gradient(circle at top right, rgba(99, 102, 241, 0.08), transparent 40%);
-  position: relative; /* PENTING: Supaya #view-login dihadkan dalam kotak ini sahaja */
-  /* Pastikan flex direction column untuk mobile handling */
-  display: flex;
-  flex-direction: column;
+  position: relative;
+  -webkit-overflow-scrolling: touch; /* Smooth scroll iOS */
 }
 
 .view { max-width: 1200px; margin: 0 auto; animation: fadeUp 0.4s ease-out; }
 @keyframes fadeUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 
-/* Login Specifics with Background Image */
+/* Login Specifics - Desktop */
 #view-login {
   position: absolute;
-  inset: 0; /* Desktop: Penuhi kawasan .main secara absolute */
+  inset: 0;
   max-width: none;
-  /* Use variable, fallback to default URL */
   background-image: var(--bg-login-image, url('https://images.unsplash.com/photo-1461896836934-ffe607ba8211?ixlib=rb-4.0.3&auto=format&fit=crop&w=2070&q=80'));
-  background-position: center; /* Sentiasa tengah */
+  background-position: center;
   background-repeat: no-repeat;
-  background-size: cover; /* Penuhi kawasan */
+  background-size: cover;
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1;
+  z-index: 100; /* Atas segala-galanya */
 }
 #view-login::before {
   content: "";
   position: absolute;
   inset: 0;
-  background: rgba(15, 23, 42, 0.75); /* Dark overlay */
+  background: rgba(15, 23, 42, 0.75);
   backdrop-filter: blur(4px);
 }
 .login-wrapper {
@@ -233,8 +235,10 @@ h3 { font-size: 16px; margin: 0; font-weight: 600; color: var(--text-main); }
   padding: 24px;
   box-shadow: var(--shadow-lg);
   position: relative;
-  overflow: visible; /* Changed from hidden to visible for dropdown */
+  overflow: visible;
+  margin-bottom: 24px;
 }
+.card:last-child { margin-bottom: 0; }
 .card-body { position: relative; }
 .card-header {
   display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;
@@ -270,7 +274,7 @@ h3 { font-size: 16px; margin: 0; font-weight: 600; color: var(--text-main); }
 .preview-placeholder i { font-size: 32px; opacity: 0.5; }
 
 /* Tabs */
-.tabs-nav { display: flex; gap: 10px; border-bottom: 1px solid var(--border); padding-bottom: 0; margin-bottom: 24px; overflow-x: auto; }
+.tabs-nav { display: flex; gap: 10px; border-bottom: 1px solid var(--border); padding-bottom: 0; margin-bottom: 24px; overflow-x: auto; -webkit-overflow-scrolling: touch; }
 .tab-btn {
   background: none; border: none; padding: 10px 16px; color: var(--text-muted);
   cursor: pointer; font-family: var(--font-sans); font-weight: 600; border-bottom: 2px solid transparent;
@@ -313,9 +317,7 @@ input:focus, select:focus {
 select { appearance: none; background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e"); background-repeat: no-repeat; background-position: right 14px center; background-size: 16px; padding-right: 40px; }
 
 /* Searchable Select Styles */
-.custom-search-select {
-  position: relative;
-}
+.custom-search-select { position: relative; }
 .search-dropdown {
   position: absolute;
   top: 100%; left: 0; right: 0;
@@ -337,15 +339,8 @@ select { appearance: none; background-image: url("data:image/svg+xml;charset=UTF
   color: var(--text-main);
 }
 .dropdown-item:last-child { border-bottom: none; }
-.dropdown-item:hover {
-  background: var(--bg-card-hover);
-  color: white;
-}
-.dropdown-item.empty-msg {
-  color: var(--text-muted);
-  cursor: default;
-  text-align: center;
-}
+.dropdown-item:hover { background: var(--bg-card-hover); color: white; }
+.dropdown-item.empty-msg { color: var(--text-muted); cursor: default; text-align: center; }
 
 /* Buttons */
 .btn {
@@ -473,60 +468,96 @@ dialog::backdrop { background: rgba(15, 23, 42, 0.7); backdrop-filter: blur(4px)
 .spinner { width: 40px; height: 40px; border: 3px solid rgba(99, 102, 241, 0.3); border-top-color: var(--primary); border-radius: 50%; animation: spin 0.8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
-/* Responsive (Mobile/Tablet) */
+/* ========= RESPONSIVE (MOBILE OPTIMIZED) ========= */
 @media (max-width: 640px) {
+  /* Ubah layout ke vertical */
   #app { 
-    grid-template-columns: 1fr; 
     display: flex; 
     flex-direction: column;
-    /* Guna dynamic height untuk elak keyboard/address bar kacau layout */
+    /* Guna dynamic height untuk elak keyboard kacau */
     height: 100dvh; 
-    overflow: hidden;
+    position: fixed; /* Kunci app pada skrin, elak browser bar scroll */
+    inset: 0;
   }
 
+  /* Sidebar jadi header kecil di atas */
   .sidebar { 
     flex-direction: row; 
     height: auto; 
-    padding: 12px 16px; 
+    min-height: 60px;
+    padding: 10px 16px; 
     justify-content: space-between; 
     border-right: none; 
     border-bottom: 1px solid var(--border);
-    flex-shrink: 0; 
+    flex-shrink: 0; /* Jangan kecut */
+    z-index: 50;
   }
   
-  .nav { flex-direction: row; flex: 0; }
+  /* Sembunyikan elemen tak perlu di mobile */
+  .brand-text, .user-info, .nav-btn span, .btn-logout span, .hint { display: none; }
+  
+  .nav { flex-direction: row; flex: 0; gap: 4px; }
+  .nav-btn { padding: 10px; justify-content: center; }
   .brand { margin: 0; }
   .user-badge { display: none; }
   .sidebar-footer { display: none; }
   
+  /* Kawasan Utama */
   .main { 
-    padding: 0; /* Full bleed background */
-    flex: 1; /* Ambil baki tinggi skrin */
+    padding: 12px; /* Kurangkan padding supaya luas */
+    flex: 1; /* Ambil baki ruang */
     display: flex; 
     flex-direction: column;
-    overflow-y: auto; /* Membolehkan scroll */
-    position: relative;
+    overflow-y: auto; /* Scroll di sini sahaja */
+    /* Elak bounce effect di iOS */
+    overscroll-behavior-y: none;
   }
   
-  h1 { font-size: 24px; }
+  h1 { font-size: 22px; }
 
-  /* OVERRIDE PENTING UNTUK MOBILE LOGIN */
+  /* Login Screen di Mobile */
   #view-login { 
-    position: relative; /* Jangan guna absolute di mobile */
+    position: relative; 
     inset: auto;
-    min-height: 100%; /* Pastikan ia memenuhi ruang minima */
+    min-height: 100%; /* Pastikan penuh sekurang-kurangnya 1 skrin */
     height: auto;
-    padding: 20px; /* Jarak sikit dari tepi */
-    align-items: flex-start; /* Mula dari atas supaya tak terpotong jika panjang */
+    padding: 16px;
+    /* Center kan content */
+    display: flex;
+    flex-direction: column;
+    justify-content: center; 
   }
 
   .login-wrapper {
-    margin: auto; /* Ini kunci utama: letak tengah secara automatik & selamat untuk scroll */
+    margin: 0 auto;
     width: 100%;
-    max-width: 400px;
   }
+  
+  /* Kad & Table Mobile */
+  .card {
+    padding: 16px; /* Kurangkan padding kad */
+    margin-bottom: 16px;
+  }
+  
+  .table th, .table td {
+    padding: 10px 8px; /* Rapatkan table cell */
+    font-size: 13px; /* Kecilkan font sikit */
+  }
+  
+  /* Button di table */
+  .btn-icon { padding: 6px; font-size: 16px; }
+  
+  /* Grid Layout jadi 1 column */
+  .grid-2, .grid-profile-layout { 
+    grid-template-columns: 1fr; 
+    gap: 16px;
+  }
+  
+  .filters-row { gap: 10px; }
+  .filter-group { min-width: 100%; } /* Input penuh lebar */
 }
 
+/* Tablet */
 @media (max-width: 1024px) and (min-width: 641px) {
   #app { grid-template-columns: 80px 1fr; }
   .brand-text, .user-info, .nav-btn span, .btn-logout span, .hint { display: none; }
