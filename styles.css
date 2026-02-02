@@ -91,7 +91,7 @@ body {
 .brand-icon img {
   width: 100%;
   height: 100%;
-  object-fit: cover; /* Pastikan gambar penuh kotak tanpa herot */
+  object-fit: contain; /* TUKAR DARI COVER KE CONTAIN: Supaya logo tak kena crop */
   display: block;
 }
 
@@ -179,9 +179,10 @@ body {
   max-width: none;
   /* Use variable, fallback to default URL */
   background-image: var(--bg-login-image, url('https://images.unsplash.com/photo-1461896836934-ffe607ba8211?ixlib=rb-4.0.3&auto=format&fit=crop&w=2070&q=80'));
-  background-position: center center;
+  background-position: center; /* Sentiasa tengah */
   background-repeat: no-repeat;
-  background-size: cover;
+  background-size: cover; /* Penuhi skrin. Jika mahu herot (stretch), tukar kepada 100% 100% */
+  background-attachment: fixed; /* Pastikan background statik */
   display: flex;
   align-items: center;
   justify-content: center;
