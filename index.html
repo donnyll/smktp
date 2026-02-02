@@ -23,8 +23,10 @@
     <!-- Sidebar -->
     <aside class="sidebar">
       <div class="brand">
-        <div class="brand-icon">
-          <i class="ph-fill ph-trophy"></i>
+        <!-- Logo Container Modified for Custom Image -->
+        <div class="brand-icon" id="brand-icon-container">
+          <i class="ph-fill ph-trophy" id="brand-default-icon"></i>
+          <img id="brand-custom-img" class="hidden" src="" alt="Logo" />
         </div>
         <div class="brand-text">
           <div class="brand-title">PAJSK</div>
@@ -80,7 +82,7 @@
       <section id="view-login" class="view">
         <div class="login-wrapper">
           <div class="login-header">
-            <h1>Selamat Datang</h1>
+            <h1 id="login-welcome-title">Selamat Datang</h1>
             <p class="muted">Sila log masuk untuk mengakses sistem.</p>
           </div>
 
@@ -109,7 +111,8 @@
 
               <div class="security-note">
                 <i class="ph ph-shield-check"></i>
-                Akses dikawal oleh <b>Supabase RLS</b>.
+                Akses dikawal oleh <b>Supabase RLS</b>.</i>
+                <b>Created by Akmal Danial</b>
               </div>
             </form>
           </div>
@@ -162,6 +165,7 @@
           <button class="tab-btn active" data-tab="admin-classes">Kelas & Murid</button>
           <button class="tab-btn" data-tab="admin-teachers">Senarai Guru</button>
           <button class="tab-btn" data-tab="admin-types">Jenis Kokurikulum</button>
+          <button class="tab-btn" data-tab="admin-settings">Tetapan Sistem</button>
         </div>
 
         <!-- Tab Content: Kelas & Murid -->
@@ -289,6 +293,78 @@
             </div>
           </div>
         </div>
+
+        <!-- Tab Content: Tetapan Sistem (New) -->
+        <div id="tab-admin-settings" class="tab-content hidden">
+            <div class="grid-2">
+                <!-- Logo Settings -->
+                <div class="card">
+                    <div class="card-header">
+                        <div class="header-title">
+                            <i class="ph ph-image"></i>
+                            <h2>Logo Sukan</h2>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <p class="muted small mb-4">Muat naik logo sekolah atau ikon sukan (Format: PNG, JPG).</p>
+                        
+                        <div class="setting-preview-box mb-4">
+                            <img id="preview-logo" src="" alt="Preview Logo" class="hidden">
+                            <div id="preview-logo-placeholder" class="preview-placeholder">
+                                <i class="ph ph-trophy"></i>
+                                <span>Tiada Logo</span>
+                            </div>
+                        </div>
+
+                        <form id="form-setting-logo" class="form">
+                            <div class="field">
+                                <label>Muat Naik Fail</label>
+                                <input type="file" id="file-logo" accept="image/*">
+                            </div>
+                            <div class="field">
+                                <label>Atau URL Gambar</label>
+                                <input type="text" id="url-logo" placeholder="https://...">
+                            </div>
+                            <button type="submit" class="btn primary full-width">Simpan Logo</button>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Background Settings -->
+                <div class="card">
+                    <div class="card-header">
+                        <div class="header-title">
+                            <i class="ph ph-monitor"></i>
+                            <h2>Latar Belakang (Login)</h2>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <p class="muted small mb-4">Tukar gambar latar belakang skrin log masuk.</p>
+                        
+                        <div class="setting-preview-box mb-4">
+                            <img id="preview-bg" src="" alt="Preview BG" class="hidden">
+                            <div id="preview-bg-placeholder" class="preview-placeholder">
+                                <i class="ph ph-image"></i>
+                                <span>Default</span>
+                            </div>
+                        </div>
+
+                        <form id="form-setting-bg" class="form">
+                            <div class="field">
+                                <label>Muat Naik Fail</label>
+                                <input type="file" id="file-bg" accept="image/*">
+                            </div>
+                            <div class="field">
+                                <label>Atau URL Gambar</label>
+                                <input type="text" id="url-bg" placeholder="https://...">
+                            </div>
+                            <button type="submit" class="btn primary full-width">Simpan Background</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+
       </section>
 
       <!-- TEACHER VIEW -->

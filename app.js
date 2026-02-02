@@ -13,14 +13,20 @@ const state = {
 
   gradeLevels: [],
   types: [],
-  teachers: [], // Senarai semua guru
+  teachers: [], 
+
+  // System Settings
+  settings: {
+    app_logo: "",
+    login_bg: ""
+  },
 
   // Admin
   adminSelectedGrade: 1,
   adminClasses: [],
   adminSelectedClassId: null,
   adminStudents: [],
-  adminTeacherList: [], // Untuk tab guru
+  adminTeacherList: [],
 
   // Teacher
   teacherSelectedGrade: 1,
@@ -75,6 +81,22 @@ const tblClassesBody = $("#tbl-classes tbody");
 const tblStudentsBody = $("#tbl-students tbody");
 const tblTypesBody = $("#tbl-types tbody");
 const tblTeachersBody = $("#tbl-teachers tbody");
+
+// Settings Elements
+const formSettingLogo = $("#form-setting-logo");
+const formSettingBg = $("#form-setting-bg");
+const fileLogo = $("#file-logo");
+const urlLogo = $("#url-logo");
+const fileBg = $("#file-bg");
+const urlBg = $("#url-bg");
+const previewLogo = $("#preview-logo");
+const previewLogoPH = $("#preview-logo-placeholder");
+const previewBg = $("#preview-bg");
+const previewBgPH = $("#preview-bg-placeholder");
+
+const brandIconContainer = $("#brand-icon-container");
+const brandDefaultIcon = $("#brand-default-icon");
+const brandCustomImg = $("#brand-custom-img");
 
 const teacherGradeSelect = $("#teacher-grade-select");
 const teacherClassSelect = $("#teacher-class-select");
@@ -166,6 +188,8 @@ function showView(key) {
   if (key === "login") {
     views.login.classList.remove("hidden");
     setActiveNav("login");
+    // Ensure styles are applied even on login screen
+    applySystemSettings(); 
     return;
   }
 
@@ -313,6 +337,184 @@ tabBtns.forEach(btn => {
     const target = document.getElementById(tabId);
     if(target) target.classList.remove("hidden");
   });
+});
+
+/* ========= SYSTEM SETTINGS LOGIC ========= */
+
+async function fetchSystemSettings() {
+  // Fetch from DB
+  const { data, error } = await sb.from("app_settings").select("*");
+  if (error && error.code !== 'PGRST116') {
+      console.warn("Error fetching settings, using defaults.", error);
+      return;
+  }
+
+  if (data) {
+    data.forEach(row => {
+      state.settings[row.key] = row.value;
+    });
+  }
+  applySystemSettings();
+}
+
+function applySystemSettings() {
+  const { app_logo, login_bg } = state.settings;
+
+  // 1. Logo Logic
+  if (app_logo) {
+    brandDefaultIcon.classList.add("hidden");
+    brandCustomImg.src = app_logo;
+    brandCustomImg.classList.remove("hidden");
+    brandIconContainer.style.background = "transparent"; // Remove background color if needed
+    
+    // Update preview in admin
+    previewLogo.src = app_logo;
+    previewLogo.classList.remove("hidden");
+    previewLogoPH.classList.add("hidden");
+    urlLogo.value = app_logo;
+  } else {
+    // Revert to default
+    brandDefaultIcon.classList.remove("hidden");
+    brandCustomImg.classList.add("hidden");
+    brandIconContainer.style.background = ""; // Reset
+    
+    previewLogo.classList.add("hidden");
+    previewLogoPH.classList.remove("hidden");
+    urlLogo.value = "";
+  }
+
+  // 2. Background Logic
+  if (login_bg) {
+    // Override CSS variable
+    document.documentElement.style.setProperty('--bg-login-image', `url('${login_bg}')`);
+    
+    // Update preview
+    previewBg.src = login_bg;
+    previewBg.classList.remove("hidden");
+    previewBgPH.classList.add("hidden");
+    urlBg.value = login_bg;
+  } else {
+    document.documentElement.style.removeProperty('--bg-login-image');
+    
+    previewBg.classList.add("hidden");
+    previewBgPH.classList.remove("hidden");
+    urlBg.value = "";
+  }
+}
+
+async function uploadToStorage(file, folder = "uploads") {
+  const ext = file.name.split('.').pop();
+  const fileName = `${folder}/${Date.now()}_${Math.random().toString(36).substr(2, 9)}.${ext}`;
+  
+  // Try uploading to 'public' bucket
+  const { data, error } = await sb.storage.from("public").upload(fileName, file, {
+    cacheControl: "3600",
+    upsert: false
+  });
+
+  if (error) throw error;
+
+  // Get Public URL
+  const { data: { publicUrl } } = sb.storage.from("public").getPublicUrl(fileName);
+  return publicUrl;
+}
+
+async function saveSetting(key, value) {
+  const { error } = await sb.from("app_settings").upsert({ key, value });
+  if (error) throw error;
+  state.settings[key] = value;
+}
+
+// Event Listeners for Settings Forms
+formSettingLogo.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  setLoading(true);
+  try {
+    let finalUrl = urlLogo.value.trim();
+    const file = fileLogo.files[0];
+
+    if (file) {
+      finalUrl = await uploadToStorage(file, "logos");
+    }
+
+    if (!finalUrl && !file) {
+      // Clear logo logic if intended
+      if(confirm("Kosongkan logo dan guna ikon asal?")) {
+        finalUrl = "";
+      } else {
+        setLoading(false);
+        return;
+      }
+    }
+
+    await saveSetting("app_logo", finalUrl);
+    applySystemSettings();
+    toast("Berjaya", "Logo sistem dikemaskini.", "ok");
+    fileLogo.value = ""; // clear input
+  } catch (err) {
+    console.error(err);
+    if(err.message.includes("bucket")) {
+       toast("Ralat Storage", "Bucket 'public' tidak ditemui. Sila baca arahan DB.", "err", 5000);
+    } else {
+       toast("Ralat", "Gagal menyimpan logo: " + err.message, "err");
+    }
+  } finally {
+    setLoading(false);
+  }
+});
+
+formSettingBg.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  setLoading(true);
+  try {
+    let finalUrl = urlBg.value.trim();
+    const file = fileBg.files[0];
+
+    if (file) {
+      finalUrl = await uploadToStorage(file, "backgrounds");
+    }
+
+    await saveSetting("login_bg", finalUrl);
+    applySystemSettings();
+    toast("Berjaya", "Latar belakang log masuk dikemaskini.", "ok");
+    fileBg.value = "";
+  } catch (err) {
+    console.error(err);
+    if(err.message.includes("bucket")) {
+       toast("Ralat Storage", "Bucket 'public' tidak ditemui. Sila baca arahan DB.", "err", 5000);
+    } else {
+       toast("Ralat", "Gagal menyimpan background: " + err.message, "err");
+    }
+  } finally {
+    setLoading(false);
+  }
+});
+
+// Auto-preview when selecting file
+fileLogo.addEventListener("change", (e) => {
+    const file = e.target.files[0];
+    if(file) {
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+            previewLogo.src = ev.target.result;
+            previewLogo.classList.remove("hidden");
+            previewLogoPH.classList.add("hidden");
+        };
+        reader.readAsDataURL(file);
+    }
+});
+
+fileBg.addEventListener("change", (e) => {
+    const file = e.target.files[0];
+    if(file) {
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+            previewBg.src = ev.target.result;
+            previewBg.classList.remove("hidden");
+            previewBgPH.classList.add("hidden");
+        };
+        reader.readAsDataURL(file);
+    }
 });
 
 /* ========= SUPABASE HELPERS ========= */
@@ -932,6 +1134,9 @@ function renderEntriesTable() {
 
 /* ========= LOADERS ========= */
 async function loadBootstrapData() {
+  // Load system settings first to avoid jarring UI changes
+  await fetchSystemSettings();
+  
   state.gradeLevels = await fetchGradeLevels();
   state.types = await fetchTypes();
   state.teachers = await fetchAllTeachers(); // Untuk dropdown guru
@@ -1753,6 +1958,12 @@ async function init() {
     if (state.user) {
       state.profile = await getProfileOrThrow();
       state.role = state.profile.role;
+      // Preload settings immediately if user exists
+      await fetchSystemSettings();
+    } else {
+      // Even if not logged in, try to fetch settings for public background
+      // However, usually we need Anon access. Assuming app_settings has public read policy.
+      await fetchSystemSettings();
     }
 
     updateAuthUI();
@@ -1772,6 +1983,7 @@ async function init() {
       try {
         state.profile = await getProfileOrThrow();
         state.role = state.profile.role;
+        await fetchSystemSettings();
       } catch (e) {
         state.profile = null;
         state.role = null;
