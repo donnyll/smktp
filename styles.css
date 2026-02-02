@@ -488,7 +488,14 @@ dialog::backdrop { background: rgba(15, 23, 42, 0.7); backdrop-filter: blur(4px)
   .brand { margin: 0; }
   .user-badge { display: none; }
   .sidebar-footer { display: none; }
-  .main { padding: 16px; }
+  .main { 
+    padding: 16px; 
+    flex: 1; /* Pastikan main ambil baki tinggi skrin */
+    display: flex; 
+    flex-direction: column;
+  }
   h1 { font-size: 24px; }
-  #view-login { background-position: left center; }
+  #view-login { 
+    background-position: center center; /* Sentiasa tengah */
+  }
 }
