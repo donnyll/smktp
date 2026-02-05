@@ -388,6 +388,8 @@ input:focus, select:focus {
   /* Ensure uploaded images are covered correctly */
   background-size: cover;
   background-position: center;
+  background-repeat: no-repeat;
+  background-attachment: fixed; /* Ensures image doesn't scroll/move oddly */
 }
 
 /* Background Logic for Login */
@@ -402,8 +404,8 @@ input:focus, select:focus {
 /* Overlay when custom image IS present */
 #view-login.has-custom-bg::before {
   content: ""; position: absolute; inset: 0; z-index: -1;
-  background: rgba(255, 255, 255, 0.85); 
-  backdrop-filter: blur(8px);
+  background: rgba(255, 255, 255, 0.35); /* Reduced opacity for clarity */
+  backdrop-filter: blur(2px); /* Reduced blur for clarity */
 }
 
 .login-wrapper { width: 100%; max-width: 400px; text-align: center; }
