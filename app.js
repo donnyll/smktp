@@ -359,6 +359,7 @@ async function fetchSystemSettings() {
 
 function applySystemSettings() {
   const { app_logo, login_bg } = state.settings;
+  const loginView = $("#view-login");
 
   // 1. Logo Logic
   if (app_logo) {
@@ -385,8 +386,9 @@ function applySystemSettings() {
 
   // 2. Background Logic
   if (login_bg) {
-    // Override CSS variable
-    document.documentElement.style.setProperty('--bg-login-image', `url('${login_bg}')`);
+    // Override CSS variable DIRECTLY on the login element
+    // This fixes the issue where :root was set but CSS selector #view-login[style*="--bg-login-image"] failed to match
+    loginView.style.setProperty('--bg-login-image', `url('${login_bg}')`);
     
     // Update preview
     previewBg.src = login_bg;
@@ -394,7 +396,7 @@ function applySystemSettings() {
     previewBgPH.classList.add("hidden");
     urlBg.value = login_bg;
   } else {
-    document.documentElement.style.removeProperty('--bg-login-image');
+    loginView.style.removeProperty('--bg-login-image');
     
     previewBg.classList.add("hidden");
     previewBgPH.classList.remove("hidden");
@@ -1214,10 +1216,24 @@ async function openStudent(studentId) {
 /* ========= AUTH + ROUTING ========= */
 function updateAuthUI() {
   const authed = !!state.user;
+  const isAdmin = state.role === "admin";
 
   document.querySelectorAll(".requires-auth").forEach((el) => {
+    // Basic toggle for elements marked with requires-auth
+    // Specific logic below overrides this if needed
     el.classList.toggle("hidden", !authed);
   });
+  
+  // Logic untuk menyembunyikan butang "Log Masuk" jika sudah login
+  navLogin.classList.toggle("hidden", authed);
+
+  // Logic khas untuk butang Admin: hanya tunjuk jika admin
+  // (Nota: Kita benarkan Admin nampak dua-dua butang supaya boleh switch)
+  navAdmin.classList.toggle("hidden", !(authed && isAdmin));
+  
+  // Butang Guru dan Log Keluar sentiasa tunjuk jika authed
+  navTeacher.classList.toggle("hidden", !authed);
+  logoutBtn.classList.toggle("hidden", !authed);
 
   userBadge.classList.toggle("hidden", !authed);
 
@@ -1226,9 +1242,6 @@ function updateAuthUI() {
     const r = state.role === "admin" ? "Pentadbir" : "Guru";
     userRole.textContent = r;
   }
-
-  navAdmin.classList.toggle("hidden", !authed);
-  navTeacher.classList.toggle("hidden", !authed);
 }
 
 async function routeAfterLogin() {
