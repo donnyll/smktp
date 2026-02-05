@@ -67,7 +67,7 @@
           </div>
         </div>
         
-        <div class="hint">v2.1 UI Update</div>
+        <div class="hint">v2.2 UI Update</div>
       </div>
     </aside>
 
@@ -430,14 +430,11 @@
 
               <div class="field">
                 <label>Guru Penasihat</label>
-                <!-- Searchable Dropdown -->
-                <div class="custom-search-select" id="teacher-search-component">
-                  <div class="input-icon-wrapper">
-                    <i class="ph ph-magnifying-glass"></i>
-                    <input type="text" id="teacher-search-input" placeholder="Cari guru..." autocomplete="off">
-                  </div>
-                  <input type="hidden" id="entry-teacher-id" required>
-                  <div id="teacher-search-dropdown" class="search-dropdown hidden"></div>
+                <!-- Simple Dropdown as requested -->
+                <div class="select-wrapper">
+                  <select id="entry-teacher-select" required>
+                    <option value="">Pilih Guru...</option>
+                  </select>
                 </div>
               </div>
 

@@ -88,7 +88,7 @@ const formSettingBg = $("#form-setting-bg");
 const fileLogo = $("#file-logo");
 const urlLogo = $("#url-logo");
 const fileBg = $("#file-bg");
-const urlBg = $("#url-bg");
+const urlBg = $("#file-bg");
 const previewLogo = $("#preview-logo");
 const previewLogoPH = $("#preview-logo-placeholder");
 const previewBg = $("#preview-bg");
@@ -115,10 +115,8 @@ const entryType = $("#entry-type");
 const entryAchievement = $("#entry-achievement");
 const tblEntriesBody = $("#tbl-entries tbody");
 
-/* Searchable Teacher Elements */
-const teacherSearchInput = $("#teacher-search-input");
-const teacherSearchHiddenId = $("#entry-teacher-id");
-const teacherSearchDropdown = $("#teacher-search-dropdown");
+/* New Simple Teacher Select (Replaced Search) */
+const entryTeacherSelect = $("#entry-teacher-select");
 
 /* Export buttons */
 const btnExportAdmin = $("#btn-export-admin");
@@ -366,7 +364,7 @@ function applySystemSettings() {
     brandDefaultIcon.classList.add("hidden");
     brandCustomImg.src = app_logo;
     brandCustomImg.classList.remove("hidden");
-    brandIconContainer.style.background = "transparent"; // Remove background color if needed
+    brandIconContainer.style.background = "transparent"; 
     
     // Update preview in admin
     previewLogo.src = app_logo;
@@ -377,18 +375,18 @@ function applySystemSettings() {
     // Revert to default
     brandDefaultIcon.classList.remove("hidden");
     brandCustomImg.classList.add("hidden");
-    brandIconContainer.style.background = ""; // Reset
+    brandIconContainer.style.background = ""; 
     
     previewLogo.classList.add("hidden");
     previewLogoPH.classList.remove("hidden");
     urlLogo.value = "";
   }
 
-  // 2. Background Logic
+  // 2. Background Logic (Improved)
   if (login_bg) {
-    // Override CSS variable DIRECTLY on the login element
-    // This fixes the issue where :root was set but CSS selector #view-login[style*="--bg-login-image"] failed to match
-    loginView.style.setProperty('--bg-login-image', `url('${login_bg}')`);
+    // Set directly via JS style property instead of CSS variable to ensure it applies
+    loginView.style.backgroundImage = `url('${login_bg}')`;
+    loginView.classList.add('has-custom-bg');
     
     // Update preview
     previewBg.src = login_bg;
@@ -396,7 +394,8 @@ function applySystemSettings() {
     previewBgPH.classList.add("hidden");
     urlBg.value = login_bg;
   } else {
-    loginView.style.removeProperty('--bg-login-image');
+    loginView.style.backgroundImage = '';
+    loginView.classList.remove('has-custom-bg');
     
     previewBg.classList.add("hidden");
     previewBgPH.classList.remove("hidden");
@@ -440,7 +439,6 @@ formSettingLogo.addEventListener("submit", async (e) => {
     }
 
     if (!finalUrl && !file) {
-      // Clear logo logic if intended
       if(confirm("Kosongkan logo dan guna ikon asal?")) {
         finalUrl = "";
       } else {
@@ -591,7 +589,6 @@ async function fetchStudentsByClass(classId) {
 }
 
 async function fetchEntriesByStudent(studentId) {
-  // Nota: join dengan profiles untuk dapat nama guru
   const { data, error } = await sb
     .from("cocurricular_entries")
     .select(`
@@ -604,7 +601,6 @@ async function fetchEntriesByStudent(studentId) {
     .order("created_at", { ascending: false });
 
   if (error) {
-    // Fallback jika column baru belum wujud di DB
     console.warn("Mungkin kolum teacher_advisor_id/achievement belum wujud. Cuba query asal.", error);
     const { data: fallback, error: err2 } = await sb
         .from("cocurricular_entries")
@@ -659,8 +655,6 @@ async function deleteType(id) {
 
 /* CRUD Guru (Profiles) */
 async function createTeacherProfile(payload) {
-  // Nota: Ini hanya create profile. Auth user perlu sign up sendiri atau guna API admin.
-  // Oleh kerana kita di client-side anon, kita insert profile sahaja sebagai rekod.
   const { error } = await sb.from("profiles").insert(payload);
   if (error) throw error;
 }
@@ -704,22 +698,19 @@ async function fetchAllRows(table, select = "*", orderCol = "id", ascending = tr
 async function exportFullReportExcel() {
   setLoading(true);
   try {
-    // 1. Fetch Data
     const gradeLevels = await fetchAllRows("grade_levels", "id,name");
     const classes = await fetchAllRows("classes", "id,grade_level_id,name");
     const students = await fetchAllRows("students", "id,class_id,full_name,student_no");
     const types = await fetchAllRows("cocurricular_types", "id,name");
     const entries = await fetchAllRows("cocurricular_entries", "*");
-    const profiles = await fetchAllRows("profiles", "id,full_name"); // Untuk nama guru
+    const profiles = await fetchAllRows("profiles", "id,full_name");
 
-    // 2. Mapping
     const gradeMap = new Map(gradeLevels.map(g => [g.id, g.name]));
     const classMap = new Map(classes.map(c => [c.id, c]));
     const typeMap = new Map(types.map(t => [t.id, t.name]));
     const studentMap = new Map(students.map(s => [s.id, s]));
     const teacherMap = new Map(profiles.map(p => [p.id, p.full_name]));
 
-    // 3. Group by Class
     const entriesByClass = {};
 
     entries.forEach(e => {
@@ -749,33 +740,27 @@ async function exportFullReportExcel() {
       });
     });
 
-    // 4. Buat Workbook SheetJS
     const wb = XLSX.utils.book_new();
 
-    // Jika tiada data, buat sheet kosong
     if (Object.keys(entriesByClass).length === 0) {
       XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet([]), "Tiada Data");
     } else {
-      // Sort class names A-Z
       const sortedClasses = Object.keys(entriesByClass).sort();
       
       sortedClasses.forEach(clsName => {
         const data = entriesByClass[clsName];
-        // Sort data by student name then date
         data.sort((a,b) => a["Nama Murid"].localeCompare(b["Nama Murid"]) || b["Tarikh"].localeCompare(a["Tarikh"]));
         
         const ws = XLSX.utils.json_to_sheet(data);
-        // Tetapkan lebar column
         const wscols = [
           {wch:30}, {wch:12}, {wch:10}, {wch:12}, {wch:20}, {wch:35}, {wch:15}, {wch:25}
         ];
         ws['!cols'] = wscols;
 
-        XLSX.utils.book_append_sheet(wb, ws, clsName.substring(0, 31)); // Max sheet name length is 31
+        XLSX.utils.book_append_sheet(wb, ws, clsName.substring(0, 31)); 
       });
     }
 
-    // 5. Download
     XLSX.writeFile(wb, `Laporan_PAJSK_Lengkap_${new Date().toISOString().slice(0,10)}.xlsx`);
     toast("Eksport Berjaya", "Laporan Excel telah dimuat turun.", "ok", 4000);
 
@@ -784,78 +769,6 @@ async function exportFullReportExcel() {
     toast("Gagal Eksport", "Berlaku ralat semasa menjana Excel.", "err");
   } finally {
     setLoading(false);
-  }
-}
-
-/* ========= SEARCHABLE DROPDOWN LOGIC ========= */
-function initTeacherSearch() {
-  if(!teacherSearchInput) return;
-
-  function filterTeachers(query = "") {
-    const q = query.toLowerCase();
-    const matches = state.teachers.filter(t => t.full_name.toLowerCase().includes(q));
-    
-    teacherSearchDropdown.innerHTML = "";
-    if (matches.length === 0) {
-      const div = document.createElement("div");
-      div.className = "dropdown-item empty-msg";
-      div.textContent = "Tiada guru dijumpai.";
-      teacherSearchDropdown.appendChild(div);
-      return;
-    }
-
-    matches.forEach(t => {
-      const div = document.createElement("div");
-      div.className = "dropdown-item";
-      div.textContent = t.full_name;
-      div.onclick = () => {
-        selectTeacher(t.id, t.full_name);
-      };
-      teacherSearchDropdown.appendChild(div);
-    });
-  }
-
-  function selectTeacher(id, name) {
-    teacherSearchHiddenId.value = id;
-    teacherSearchInput.value = name;
-    teacherSearchDropdown.classList.add("hidden");
-  }
-
-  // Events
-  teacherSearchInput.addEventListener("focus", () => {
-    filterTeachers(teacherSearchInput.value); // Show filtering based on current text
-    teacherSearchDropdown.classList.remove("hidden");
-  });
-
-  teacherSearchInput.addEventListener("input", (e) => {
-    // Jika user clear input, clear juga ID
-    if(!e.target.value) teacherSearchHiddenId.value = "";
-    filterTeachers(e.target.value);
-    teacherSearchDropdown.classList.remove("hidden");
-  });
-
-  // Close when clicking outside
-  document.addEventListener("click", (e) => {
-    if (!e.target.closest("#teacher-search-component")) {
-      teacherSearchDropdown.classList.add("hidden");
-    }
-  });
-
-  // Pre-populate initially
-  filterTeachers("");
-}
-
-// Helper to reset and select
-function setTeacherSearchValue(id) {
-  if (!id) {
-    teacherSearchHiddenId.value = "";
-    teacherSearchInput.value = "";
-    return;
-  }
-  const teacher = state.teachers.find(t => t.id === id);
-  if (teacher) {
-    teacherSearchHiddenId.value = teacher.id;
-    teacherSearchInput.value = teacher.full_name;
   }
 }
 
@@ -883,7 +796,6 @@ function populateTypeSelect(selectEl, selectedId = "") {
 }
 
 function populateTeacherSelect(selectEl, selectedId = "") {
-  // Ini untuk modal/admin yang masih guna select biasa
   if(selectEl) {
     selectEl.innerHTML = `<option value="">Pilih Guru...</option>`;
     state.teachers.forEach((t) => {
@@ -894,9 +806,6 @@ function populateTeacherSelect(selectEl, selectedId = "") {
     });
     if (selectedId) selectEl.value = selectedId;
   }
-
-  // Juga refresh data untuk search component
-  initTeacherSearch();
 }
 
 function gradeName(id) {
@@ -1106,7 +1015,6 @@ function renderEntriesTable() {
   state.studentEntries.forEach((e) => {
     const canManage = (state.role === "admin") || (e.created_by === state.user.id);
     const typeName = e.cocurricular_types?.name || "(Tidak Diketahui)";
-    // Fallback untuk Guru Pengiring jika tiada dalam relation, guna created_by
     const teacherName = e.profiles?.full_name || "(Guru)";
     const achievement = e.achievement || "Penyertaan";
     
@@ -1136,18 +1044,17 @@ function renderEntriesTable() {
 
 /* ========= LOADERS ========= */
 async function loadBootstrapData() {
-  // Load system settings first to avoid jarring UI changes
   await fetchSystemSettings();
   
   state.gradeLevels = await fetchGradeLevels();
   state.types = await fetchTypes();
-  state.teachers = await fetchAllTeachers(); // Untuk dropdown guru
+  state.teachers = await fetchAllTeachers(); 
 
   populateGradeSelect(adminGradeSelect, state.adminSelectedGrade);
   populateGradeSelect(teacherGradeSelect, state.teacherSelectedGrade);
   
   populateTypeSelect(entryType);
-  populateTeacherSelect(); // Ini akan init search juga
+  populateTeacherSelect(entryTeacherSelect); 
 
   renderTypesTable();
 }
@@ -1157,7 +1064,6 @@ async function loadAdminData() {
   renderClassesTable();
   populateAdminClassSelect();
   
-  // Load Teachers list
   state.adminTeacherList = await fetchAllTeachers();
   renderTeachersTable();
 
@@ -1194,17 +1100,18 @@ async function openStudent(studentId) {
 
   // Reset form
   populateTypeSelect(entryType);
+  populateTeacherSelect(entryTeacherSelect); // Ensure fresh list
+
   entrySubject.value = "";
   entryDate.valueAsDate = new Date();
   entryAchievement.value = "Penyertaan";
   
-  // Reset Search Guru
-  setTeacherSearchValue(null);
-
   // Set default guru pengiring kepada current user jika dia guru
   const currentUserIsTeacher = state.teachers.find(t => t.id === state.user.id);
   if(currentUserIsTeacher) {
-      setTeacherSearchValue(state.user.id);
+      entryTeacherSelect.value = state.user.id;
+  } else {
+      entryTeacherSelect.value = "";
   }
 
   state.studentEntries = await fetchEntriesByStudent(studentId);
@@ -1219,19 +1126,11 @@ function updateAuthUI() {
   const isAdmin = state.role === "admin";
 
   document.querySelectorAll(".requires-auth").forEach((el) => {
-    // Basic toggle for elements marked with requires-auth
-    // Specific logic below overrides this if needed
     el.classList.toggle("hidden", !authed);
   });
   
-  // Logic untuk menyembunyikan butang "Log Masuk" jika sudah login
   navLogin.classList.toggle("hidden", authed);
-
-  // Logic khas untuk butang Admin: hanya tunjuk jika admin
-  // (Nota: Kita benarkan Admin nampak dua-dua butang supaya boleh switch)
   navAdmin.classList.toggle("hidden", !(authed && isAdmin));
-  
-  // Butang Guru dan Log Keluar sentiasa tunjuk jika authed
   navTeacher.classList.toggle("hidden", !authed);
   logoutBtn.classList.toggle("hidden", !authed);
 
@@ -1315,11 +1214,9 @@ btnExportAdmin?.addEventListener("click", async () => {
   await exportFullReportExcel();
 });
 btnExportStudent?.addEventListener("click", async () => {
-  // Masih guna CSV untuk single student sebab simple
   const sId = state.selectedStudent?.id;
   if(!sId) return;
   toast("Info", "Sedang menjana CSV untuk murid ini...", "ok");
-  // ... (Guna logic lama atau tambah logic Excel untuk single student jika perlu)
 });
 
 
@@ -1378,7 +1275,6 @@ signupForm.addEventListener("submit", async (e) => {
     toast("Akaun Dicipta", "Sila sahkan emel anda sebelum log masuk.", "ok", 4200);
     signupPanel.classList.add("hidden");
 
-    // Jika auto-login
     const s = data.session;
     if (s) {
       state.session = s;
@@ -1399,7 +1295,7 @@ adminGradeSelect.addEventListener("change", async () => {
   state.adminSelectedGrade = Number(adminGradeSelect.value);
   setLoading(true);
   try {
-    await loadAdminData(); // Refactored to load classes & students
+    await loadAdminData(); 
   } catch (e) {
     toast("Ralat", e.message, "err");
   } finally {
@@ -1697,7 +1593,6 @@ tblTypesBody.addEventListener("click", async (e) => {
 
 /* Manage Teachers (Admin) */
 btnTeacherCreate.addEventListener("click", async () => {
-  // Hanya tambah profile, bukan user auth sebenar (kerana client-side restriction)
   const values = await openModal({
     title: "Tambah Profil Guru",
     submitText: "Tambah",
@@ -1711,7 +1606,6 @@ btnTeacherCreate.addEventListener("click", async () => {
 
   setLoading(true);
   try {
-    // Generate random UUID untuk profile ID sebab tiada auth user lagi
     const fakeId = crypto.randomUUID();
     await createTeacherProfile({
       id: fakeId,
@@ -1822,7 +1716,7 @@ backTeacherBtn.addEventListener("click", async () => {
   await refreshAllTeacher();
 });
 
-/* Add entry (dikemaskini dengan Guru & Pencapaian) */
+/* Add entry (Updated to use Select instead of Search) */
 entryForm.addEventListener("submit", async (e) => {
   e.preventDefault();
   if (!state.selectedStudent) return;
@@ -1831,8 +1725,7 @@ entryForm.addEventListener("submit", async (e) => {
   const activity_date = entryDate.value;
   const type_id = entryType.value;
   const achievement = entryAchievement.value;
-  // UPDATE: Ambil value dari hidden ID, bukan select
-  const teacher_id = teacherSearchHiddenId.value;
+  const teacher_id = entryTeacherSelect.value;
 
   if (!subject || subject.length < 3) {
     toast("Validasi", "Aktiviti diperlukan (min 3 aksara).", "warn");
@@ -1851,7 +1744,7 @@ entryForm.addEventListener("submit", async (e) => {
   }
   if (!teacher_id) {
     toast("Validasi", "Sila pilih Guru Pengiring.", "warn");
-    teacherSearchInput.focus();
+    entryTeacherSelect.focus();
     return;
   }
 
@@ -1870,7 +1763,7 @@ entryForm.addEventListener("submit", async (e) => {
     toast("Disimpan", "Rekod berjaya ditambah.", "ok");
     entrySubject.value = "";
     entryDate.valueAsDate = new Date();
-    // Kekalkan pilihan guru & jenis untuk memudahkan entry seterusnya
+    // Keep Teacher & Category selected for convenience
     
     state.studentEntries = await fetchEntriesByStudent(state.selectedStudent.id);
     renderEntriesTable();
@@ -1907,7 +1800,6 @@ tblEntriesBody.addEventListener("click", async (e) => {
             {value:"Keempat", label:"Keempat (No. 4)"},
             {value:"Kelima", label:"Kelima (No. 5)"},
         ]},
-        // Untuk Modal, kita kekalkan select biasa untuk simplicity
         { name: "teacher_advisor_id", label: "Guru Pengiring", type: "select", required:true, options: state.teachers.map(t => ({value:t.id, label:t.full_name})) }
       ],
       initial: {
@@ -1971,11 +1863,8 @@ async function init() {
     if (state.user) {
       state.profile = await getProfileOrThrow();
       state.role = state.profile.role;
-      // Preload settings immediately if user exists
       await fetchSystemSettings();
     } else {
-      // Even if not logged in, try to fetch settings for public background
-      // However, usually we need Anon access. Assuming app_settings has public read policy.
       await fetchSystemSettings();
     }
 

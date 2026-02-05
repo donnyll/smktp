@@ -309,26 +309,13 @@ input:focus, select:focus {
   pointer-events: none; color: var(--text-muted);
 }
 
-/* Searchable Dropdown */
+/* Searchable Dropdown - DEPRECATED in favor of simple select, but kept for legacy if needed */
 .input-icon-wrapper { position: relative; }
 .input-icon-wrapper i {
   position: absolute; left: 16px; top: 50%; transform: translateY(-50%);
   color: var(--text-muted); font-size: 18px;
 }
 .input-icon-wrapper input { padding-left: 44px; }
-
-.search-dropdown {
-  position: absolute; top: 110%; left: 0; right: 0;
-  background: white; border-radius: var(--radius-md);
-  box-shadow: var(--shadow-float); z-index: 100;
-  max-height: 250px; overflow-y: auto;
-  border: 1px solid #f1f5f9;
-}
-.dropdown-item {
-  padding: 12px 16px; cursor: pointer; font-size: 14px; color: var(--text-main);
-  border-bottom: 1px solid #f8fafc;
-}
-.dropdown-item:hover { background: var(--primary-light); color: var(--primary-hover); }
 
 /* Tabs (Admin) */
 .tabs-nav {
@@ -398,21 +385,25 @@ input:focus, select:focus {
   background: var(--bg-body);
   display: flex; align-items: center; justify-content: center;
   padding: 24px;
+  /* Ensure uploaded images are covered correctly */
+  background-size: cover;
+  background-position: center;
 }
 
 /* Background Logic for Login */
-#view-login::before {
+/* Base gradient when no image */
+#view-login:not(.has-custom-bg)::before {
   content: ""; position: absolute; inset: 0; z-index: -1;
   background: 
     radial-gradient(circle at 10% 20%, rgba(13, 148, 136, 0.05) 0%, transparent 40%),
     radial-gradient(circle at 90% 80%, rgba(14, 165, 233, 0.05) 0%, transparent 40%);
 }
-/* If user uploads custom BG */
-#view-login[style*="--bg-login-image"] {
-  background-size: cover; background-position: center;
-}
-#view-login[style*="--bg-login-image"]::before {
-  background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(8px);
+
+/* Overlay when custom image IS present */
+#view-login.has-custom-bg::before {
+  content: ""; position: absolute; inset: 0; z-index: -1;
+  background: rgba(255, 255, 255, 0.85); 
+  backdrop-filter: blur(8px);
 }
 
 .login-wrapper { width: 100%; max-width: 400px; text-align: center; }
@@ -608,7 +599,10 @@ dialog::backdrop { background: rgba(15, 23, 42, 0.4); backdrop-filter: blur(4px)
   .view-header { flex-direction: column; align-items: flex-start; gap: 16px; }
   
   /* Grid collapses */
-  .grid-2, .grid-profile-layout { grid-template-columns: 1fr; }
+  .grid-2, .grid-profile-layout { 
+      grid-template-columns: 1fr; 
+      gap: 32px; /* INCREASED GAP for Mobile Profile to separate Form and History */
+  }
   .filters-row { flex-direction: column; align-items: stretch; gap: 16px; }
 
   /* Student Profile */
@@ -616,6 +610,14 @@ dialog::backdrop { background: rgba(15, 23, 42, 0.4); backdrop-filter: blur(4px)
     flex-direction: column; text-align: center; gap: 16px; padding: 24px 16px;
   }
   .profile-main { flex-direction: column; gap: 12px; }
+  
+  /* Mobile Form Spacing Improvements */
+  .card h-fit { height: auto; }
+  .form .field { margin-bottom: 20px; } /* Increase spacing between inputs */
+  .card { 
+      padding: 24px 20px; /* Slightly tighter padding on edges, but enough vertical */
+      box-shadow: 0 4px 15px rgba(0,0,0,0.08); /* More subtle shadow */
+  }
 
   /* Table Mobile Fix (Scrollable) */
   .table-container {
