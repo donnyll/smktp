@@ -59,7 +59,8 @@ html, body {
   background-color: var(--bg-body);
   color: var(--text-main);
   -webkit-font-smoothing: antialiased;
-  overflow: hidden; /* App-like structure */
+  /* Default overflow hidden for Desktop App-feel, overwritten in mobile media query */
+  overflow: hidden; 
 }
 
 button, input, select { font-family: inherit; }
@@ -541,11 +542,19 @@ dialog::backdrop { background: rgba(15, 23, 42, 0.4); backdrop-filter: blur(4px)
    ========================================= */
 
 @media (max-width: 768px) {
+  /* FIX: Allow scrolling on body for mobile devices */
+  html, body {
+    overflow-y: auto !important; /* Forces scroll bar */
+    height: auto !important;
+    position: relative;
+    -webkit-overflow-scrolling: touch; /* Smooth scrolling on iOS */
+  }
+
   #app {
     display: block; /* Remove flex column complexity for the root */
     height: auto;
     min-height: 100vh;
-    overflow-x: hidden;
+    overflow: visible;
   }
 
   /* --- MOBILE NAVIGATION (Bottom Bar) --- */
@@ -614,6 +623,13 @@ dialog::backdrop { background: rgba(15, 23, 42, 0.4); backdrop-filter: blur(4px)
   }
   .table th:first-child, .table td:first-child { padding-left: 24px; }
   
-  /* Login Screen */
-  #view-login { position: fixed; height: 100vh; z-index: 2000; } /* Cover bottom nav */
+  /* Login Screen - FIX: Allow scrolling if keyboard pushes content */
+  #view-login { 
+    position: fixed; 
+    height: 100%; 
+    z-index: 2000; 
+    overflow-y: auto; /* Allow scroll inside login view */
+    align-items: flex-start; /* Better for tall content */
+    padding-top: 10vh; /* Visual spacing */
+  } 
 }
