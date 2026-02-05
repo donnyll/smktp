@@ -275,7 +275,7 @@ function openModal({ title, submitText = "Simpan", fields = [], initial = {} }) 
     wrap.appendChild(label);
     
     const inputWrapper = document.createElement("div");
-    inputWrapper.className = "select-wrapper"; 
+    inputWrapper.className = f.type === 'select' ? "select-wrapper" : ""; 
     inputWrapper.appendChild(input);
     
     wrap.appendChild(inputWrapper);
@@ -918,7 +918,7 @@ function renderClassesTable() {
       <td class="right">
         <div class="actions">
           <button class="btn-icon" title="Edit" data-action="edit" data-id="${c.id}"><i class="ph ph-pencil-simple"></i></button>
-          <button class="btn-icon" title="Padam" style="color:var(--danger)" data-action="del" data-id="${c.id}"><i class="ph ph-trash"></i></button>
+          <button class="btn-icon" title="Padam" style="color:var(--accent-red)" data-action="del" data-id="${c.id}"><i class="ph ph-trash"></i></button>
         </div>
       </td>
     `;
@@ -973,7 +973,7 @@ function renderStudentsTable() {
       <td class="right">
         <div class="actions">
           <button class="btn-icon" title="Edit" data-action="edit" data-id="${s.id}"><i class="ph ph-pencil-simple"></i></button>
-          <button class="btn-icon" title="Padam" style="color:var(--danger)" data-action="del" data-id="${s.id}"><i class="ph ph-trash"></i></button>
+          <button class="btn-icon" title="Padam" style="color:var(--accent-red)" data-action="del" data-id="${s.id}"><i class="ph ph-trash"></i></button>
         </div>
       </td>
     `;
@@ -995,7 +995,7 @@ function renderTypesTable() {
       <td class="right">
         <div class="actions">
           <button class="btn-icon" title="Edit" data-action="edit" data-id="${t.id}"><i class="ph ph-pencil-simple"></i></button>
-          <button class="btn-icon" title="Padam" style="color:var(--danger)" data-action="del" data-id="${t.id}"><i class="ph ph-trash"></i></button>
+          <button class="btn-icon" title="Padam" style="color:var(--accent-red)" data-action="del" data-id="${t.id}"><i class="ph ph-trash"></i></button>
         </div>
       </td>
     `;
@@ -1024,7 +1024,7 @@ function renderTeachersTable() {
       <td class="right">
         <div class="actions">
           <button class="btn-icon" title="Edit" data-action="edit" data-id="${t.id}"><i class="ph ph-pencil-simple"></i></button>
-          <button class="btn-icon" title="Padam" style="color:var(--danger)" data-action="del" data-id="${t.id}" ${isSelf ? 'disabled' : ''}><i class="ph ph-trash"></i></button>
+          <button class="btn-icon" title="Padam" style="color:var(--accent-red)" data-action="del" data-id="${t.id}" ${isSelf ? 'disabled' : ''}><i class="ph ph-trash"></i></button>
         </div>
       </td>
     `;
@@ -1122,7 +1122,7 @@ function renderEntriesTable() {
           <button class="btn-icon" title="Edit" data-action="edit" data-id="${e.id}" ${canManage ? "" : "disabled"} style="${canManage?'':'opacity:0.3'}">
             <i class="ph ph-pencil-simple"></i>
           </button>
-          <button class="btn-icon" title="Padam" data-action="del" data-id="${e.id}" ${canManage ? "" : "disabled"} style="${canManage?'color:var(--danger)':'opacity:0.3'}">
+          <button class="btn-icon" title="Padam" data-action="del" data-id="${e.id}" ${canManage ? "" : "disabled"} style="${canManage?'color:var(--accent-red)':'opacity:0.3'}">
             <i class="ph ph-trash"></i>
           </button>
         </div>
