@@ -123,6 +123,12 @@
               <button type="button" class="btn-icon" id="btn-cancel-signup"><i class="ph ph-x"></i></button>
             </div>
             <form id="form-signup" class="form">
+              <!-- Field Baru: Nama Penuh -->
+              <div class="field">
+                <label>Nama Penuh</label>
+                <input id="signup-fullname" type="text" required placeholder="Cth: Cikgu Ali" minlength="3" />
+              </div>
+
               <div class="field">
                 <label>Emel</label>
                 <input id="signup-email" type="email" required placeholder="email@domain.com" />
@@ -429,7 +435,7 @@
               </div>
 
               <div class="field">
-                <label>Guru Penasihat</label>
+                <label>Guru Pengiring</label>
                 <!-- Simple Dropdown as requested -->
                 <div class="select-wrapper">
                   <select id="entry-teacher-select" required>

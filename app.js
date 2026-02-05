@@ -88,7 +88,7 @@ const formSettingBg = $("#form-setting-bg");
 const fileLogo = $("#file-logo");
 const urlLogo = $("#url-logo");
 const fileBg = $("#file-bg");
-const urlBg = $("#url-bg"); // FIXED: Was incorrectly selecting #file-bg
+const urlBg = $("#url-bg"); 
 const previewLogo = $("#preview-logo");
 const previewLogoPH = $("#preview-logo-placeholder");
 const previewBg = $("#preview-bg");
@@ -535,9 +535,13 @@ async function getProfileOrThrow() {
 
   if (error && error.code === "PGRST116") {
     // Auto-create profile jika tiada (biasanya untuk first login)
+    // UPDATE: Gunakan user_metadata.full_name jika ada (dari proses signup)
+    const metaName = state.user.user_metadata?.full_name;
+    const finalName = metaName || state.user.email || "";
+
     const { error: insErr } = await sb.from("profiles").insert({
       id: uid,
-      full_name: state.user.email || "",
+      full_name: finalName,
       role: "teacher",
     });
     if (insErr) throw insErr;
@@ -1261,11 +1265,18 @@ loginForm.addEventListener("submit", async (e) => {
   }
 });
 
+/* SIGNUP LOGIC (UPDATED WITH FULL NAME) */
 signupForm.addEventListener("submit", async (e) => {
   e.preventDefault();
 
+  const fullName = $("#signup-fullname").value.trim();
   const email = $("#signup-email").value.trim();
   const password = $("#signup-password").value;
+
+  if (!fullName) {
+    toast("Validasi", "Sila masukkan Nama Penuh.", "warn");
+    return;
+  }
 
   setLoading(true);
   try {
@@ -1273,22 +1284,20 @@ signupForm.addEventListener("submit", async (e) => {
       email,
       password,
       options: {
-        data: { full_name: "" }
+        // Hantar full_name sebagai metadata
+        data: { full_name: fullName }
       }
     });
     if (error) throw error;
 
-    toast("Akaun Dicipta", "Sila sahkan emel anda sebelum log masuk.", "ok", 4200);
+    toast("Akaun Dicipta", "Sila log masuk sekarang.", "ok", 4200);
     signupPanel.classList.add("hidden");
+    
+    // Reset form
+    $("#signup-fullname").value = "";
+    $("#signup-email").value = "";
+    $("#signup-password").value = "";
 
-    const s = data.session;
-    if (s) {
-      state.session = s;
-      state.user = data.user;
-      state.profile = await getProfileOrThrow();
-      state.role = state.profile.role;
-      await routeAfterLogin();
-    }
   } catch (err) {
     toast("Pendaftaran Gagal", err.message, "err");
   } finally {
