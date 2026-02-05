@@ -88,7 +88,7 @@ const formSettingBg = $("#form-setting-bg");
 const fileLogo = $("#file-logo");
 const urlLogo = $("#url-logo");
 const fileBg = $("#file-bg");
-const urlBg = $("#file-bg");
+const urlBg = $("#url-bg"); // FIXED: Was incorrectly selecting #file-bg
 const previewLogo = $("#preview-logo");
 const previewLogoPH = $("#preview-logo-placeholder");
 const previewBg = $("#preview-bg");
@@ -392,14 +392,20 @@ function applySystemSettings() {
     previewBg.src = login_bg;
     previewBg.classList.remove("hidden");
     previewBgPH.classList.add("hidden");
-    urlBg.value = login_bg;
+    
+    // Safety check to ensure urlBg is an input text element, not file
+    if(urlBg && urlBg.type === 'text') {
+        urlBg.value = login_bg;
+    }
   } else {
     loginView.style.backgroundImage = '';
     loginView.classList.remove('has-custom-bg');
     
     previewBg.classList.add("hidden");
     previewBgPH.classList.remove("hidden");
-    urlBg.value = "";
+    if(urlBg && urlBg.type === 'text') {
+        urlBg.value = "";
+    }
   }
 }
 
