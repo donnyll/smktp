@@ -389,7 +389,13 @@ input:focus, select:focus {
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
-  background-attachment: fixed; /* Ensures image doesn't scroll/move oddly */
+  
+  /* UPDATED: Remove view limits so it fills the entire right column */
+  max-width: none !important;
+  width: 100% !important;
+  height: 100% !important;
+  margin: 0 !important;
+  border-radius: 0;
 }
 
 /* Background Logic for Login */
@@ -408,7 +414,7 @@ input:focus, select:focus {
   backdrop-filter: blur(2px); /* Reduced blur for clarity */
 }
 
-.login-wrapper { width: 100%; max-width: 400px; text-align: center; }
+.login-wrapper { width: 100%; max-width: 400px; text-align: center; position: relative; z-index: 2; }
 
 .login-header { margin-bottom: 32px; }
 .login-header h1 { font-size: 28px; color: var(--primary); margin-bottom: 8px; }
