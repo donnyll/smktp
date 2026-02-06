@@ -55,6 +55,7 @@ const navLogin = $("#nav-login");
 const navAdmin = $("#nav-admin");
 const navTeacher = $("#nav-teacher");
 const logoutBtn = $("#btn-logout");
+const themeToggleBtn = $("#btn-theme-toggle");
 
 const userBadge = $("#user-badge");
 const userEmail = $("#user-email");
@@ -231,6 +232,45 @@ function escapeHtml(str) {
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#039;");
 }
+
+/* ========= THEME LOGIC (DARK/LIGHT) ========= */
+function initTheme() {
+  const savedTheme = localStorage.getItem('theme');
+  const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+  
+  if (savedTheme === 'dark' || (!savedTheme && prefersDark)) {
+    document.documentElement.setAttribute('data-theme', 'dark');
+    updateThemeIcon(true);
+  } else {
+    document.documentElement.setAttribute('data-theme', 'light');
+    updateThemeIcon(false);
+  }
+}
+
+function toggleTheme() {
+  const current = document.documentElement.getAttribute('data-theme');
+  const newTheme = current === 'dark' ? 'light' : 'dark';
+  
+  document.documentElement.setAttribute('data-theme', newTheme);
+  localStorage.setItem('theme', newTheme);
+  
+  updateThemeIcon(newTheme === 'dark');
+}
+
+function updateThemeIcon(isDark) {
+  const icon = themeToggleBtn.querySelector('i');
+  const text = themeToggleBtn.querySelector('span');
+  if (isDark) {
+    icon.className = 'ph ph-sun';
+    text.textContent = 'Light Mode';
+  } else {
+    icon.className = 'ph ph-moon';
+    text.textContent = 'Dark Mode';
+  }
+}
+
+themeToggleBtn.addEventListener('click', toggleTheme);
+
 
 /* ========= MODAL ========= */
 function openModal({ title, submitText = "Simpan", fields = [], initial = {} }) {
@@ -1865,6 +1905,9 @@ tblEntriesBody.addEventListener("click", async (e) => {
 
 /* ========= INIT ========= */
 async function init() {
+  // Initialize Theme First (Visuals)
+  initTheme();
+  
   if (SUPABASE_URL.includes("YOUR_")) {
     toast("Setup Diperlukan", "Sila tetapkan SUPABASE_URL & KEY.", "warn", 6000);
   }
