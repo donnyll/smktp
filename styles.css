@@ -630,17 +630,15 @@ dialog::backdrop { background: rgba(15, 23, 42, 0.4); backdrop-filter: blur(4px)
     padding: 20px 16px;
     padding-bottom: 110px; /* HUGE padding to clear the fixed nav */
     overflow-y: visible; /* Let body handle scroll */
-    overflow-x: hidden; /* Prevent horizontal scroll causing cropping */
   }
 
   /* Header adjustments */
   .view-header { flex-direction: column; align-items: flex-start; gap: 16px; }
   
-  /* Grid collapses to Flex Column for guaranteed stacking */
+  /* Grid collapses */
   .grid-2, .grid-profile-layout { 
-      display: flex;
-      flex-direction: column;
-      gap: 24px;
+      grid-template-columns: 1fr; 
+      gap: 24px; /* Reduced gap slightly for mobile */
   }
   .filters-row { flex-direction: column; align-items: stretch; gap: 16px; }
 
@@ -651,22 +649,26 @@ dialog::backdrop { background: rgba(15, 23, 42, 0.4); backdrop-filter: blur(4px)
   .profile-main { flex-direction: column; gap: 12px; }
   
   /* Mobile Form Spacing Improvements */
-  .card.h-fit { height: auto; } /* Fixed selector typo (added dot) */
+  .card.h-fit { height: auto; } /* FIXED TYPO: added '.' before h-fit */
   .form .field { margin-bottom: 20px; } /* Increase spacing between inputs */
+  
   .card { 
-      padding: 24px 20px; /* Slightly tighter padding on edges, but enough vertical */
-      box-shadow: 0 4px 15px rgba(0,0,0,0.08); /* More subtle shadow */
+      padding: 24px 20px; 
+      box-shadow: 0 4px 15px rgba(0,0,0,0.08); 
+      width: 100%; /* Ensure card takes full width of grid */
   }
 
-  /* Table Mobile Fix (Scrollable) */
+  /* Table Mobile Fix (Full bleed to card edge) */
   .table-container {
-    margin: 0 -20px; /* Match card padding to go full width inside card */
+    /* -20px margin matches card padding 20px */
+    margin: 0 -20px; 
+    /* width is content (100%) + left pad (20) + right pad (20) */
     width: calc(100% + 40px); 
     border-radius: 0; 
     border-left: none; 
     border-right: none;
   }
-  .table th:first-child, .table td:first-child { padding-left: 20px; }
+  .table th:first-child, .table td:first-child { padding-left: 24px; }
   
   /* Login Screen - FIX: Allow scrolling if keyboard pushes content */
   #view-login { 
